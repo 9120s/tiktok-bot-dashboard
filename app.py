@@ -1,7 +1,7 @@
 import os
+import requests
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from flask_sqlalchemy import SQLAlchemy
-import requests
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'super-secret-key-2s2')
@@ -11,7 +11,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-# نموذج قاعدة البيانات للتنبيهات
+# نموذج التنبيهات
 class Alert(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     guild_id = db.Column(db.String(100), nullable=False)
@@ -21,7 +21,7 @@ class Alert(db.Model):
 with app.app_context():
     db.create_all()
 
-# دالة لتصفية السيرفرات بناءً على صلاحيات ورتبة المستخدم (Manage Server / Admin)
+# تصفية السيرفرات بناءً على صلاحيات الإدارة للمستخدم (Administrator / Manage Server)
 def filter_manageable_guilds(guilds):
     manageable = []
     for g in guilds:
@@ -35,16 +35,14 @@ def filter_manageable_guilds(guilds):
 def index():
     user = session.get('user')
     guilds = session.get('user_guilds', [])
+    
+    # تصفية قائمة السيرفرات المتاحة للمستخدم حسب صلاحياته فقط
+    filtered_guilds = filter_manageable_guilds(guilds) if guilds else []
+    
     alerts = Alert.query.all()
-    return render_template('index.html', user=user, guilds=guilds, alerts=alerts)
+    return render_template('index.html', user=user, guilds=filtered_guilds, alerts=alerts)
 
-# مسار تسجيل الدخول عبر ديسكورد أو النظام
-@app.route('/login')
-def login():
-    # في حال ربط Discord OAuth2 تقوم بحفظ السيرفرات التي يملك فيها رتبة في Session
-    return redirect('/')
-
-# مسار تسجيل الخروج المعدل (يمسح الجلسة بالكامل)
+# مسار تسجيل الخروج الصحيح
 @app.route('/logout')
 def logout():
     session.clear()
