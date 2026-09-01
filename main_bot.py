@@ -1,7 +1,7 @@
 import os
-import asyncio
+import threading
 import requests
-from flask import Flask, redirect, url_for, session, request, render_template_string
+from flask import Flask, redirect, session, request, render_template_string
 import discord
 from discord.ext import commands
 from TikTokLive import TikTokLiveClient
@@ -21,15 +21,14 @@ TIKTOK_USERNAME = os.environ.get("TIKTOK_USERNAME", "2vce4")
 
 API_BASE_URL = "https://discord.com/api/v10"
 
-# بيانات تخزين مؤقتة للإعدادات والمتفاعلين
 CONFIG = {
     "channel_id": None,
     "top_title": "🏆 أفضل 3 متفاعلين في البث الحالي"
 }
-user_activity = {}  # {username: comment_count}
+user_activity = {}
 
 # -------------------------------------------------------------------
-# 2. إعدادات بوت الديسكورد والتيك توك
+# 2. إعدادات ديسكورد وتيك توك
 # -------------------------------------------------------------------
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -47,26 +46,17 @@ async def on_comment(event: CommentEvent):
     user_activity[user] = user_activity.get(user, 0) + 1
 
 async def send_top_active_users():
-    """إرسال أفضل 3 متفاعلين إلى قناة الديسكورد"""
     if not CONFIG["channel_id"]:
         return
 
     channel = bot.get_channel(int(CONFIG["channel_id"]))
-    if not channel:
+    if not channel or not user_activity:
         return
 
-    if not user_activity:
-        return
-
-    # ترتيب المتفاعلين حسب أكثرهم تعليقاً واختيار أعلى 3
     sorted_users = sorted(user_activity.items(), key=lambda x: x[1], reverse=True)[:3]
-    
-    embed = discord.Embed(
-        title=CONFIG["top_title"],
-        color=discord.Color.gold()
-    )
-    
+    embed = discord.Embed(title=CONFIG["top_title"], color=discord.Color.gold())
     medals = ["🥇 المركز الأول", "🥈 المركز الثاني", "🥉 المركز الثالث"]
+    
     for idx, (username, count) in enumerate(sorted_users):
         embed.add_field(
             name=f"{medals[idx]}: {username}",
@@ -176,7 +166,6 @@ def callback():
     user_data = requests.get(f"{API_BASE_URL}/users/@me", headers=user_headers).json()
     all_guilds = requests.get(f"{API_BASE_URL}/users/@me/guilds", headers=user_headers).json()
 
-    # فلترة السيرفرات لمنع تضخم حجم الـ Session
     filtered_guilds = []
     if isinstance(all_guilds, list):
         for g in all_guilds:
@@ -204,7 +193,7 @@ def save_settings():
 @app.route('/trigger-top')
 def trigger_top():
     if 'user' in session and bot.loop:
-        asyncio.run_coroutine_threadsafe(send_top_active_users(), bot.loop)
+        bot.loop.create_task(send_top_active_users())
     return redirect('/')
 
 @app.route('/logout')
@@ -213,22 +202,16 @@ def logout():
     return redirect('/')
 
 # -------------------------------------------------------------------
-# 4. تشغيل الخدمات بالتوازي
+# 4. تشغيل سيرفر اللوحة في خلفية التطبيق
 # -------------------------------------------------------------------
-async def main():
-    # تشغيل سيرفر Web الخاص باللوحة في الخلفية
-    from hypercorn.asyncio import serve
-    from hypercorn.config import Config
-
-    config = Config()
-    config.bind = [f"0.0.0.0:{os.environ.get('PORT', 10000)}"]
-
-    # تشغيل بوت ديسكورد وتيك توك ولوحة التحكم معاً
-    asyncio.create_task(serve(app, config))
-    if BIKTOK_USERNAME := os.environ.get("TIKTOK_USERNAME"):
-        asyncio.create_task(tiktok_client.start())
-    
-    await bot.start(BOT_TOKEN)
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    # تشغيل سيرفر Flask في Thread منفصل
+    threading.Thread(target=run_flask, daemon=True).start()
+    
+    # تشغيل بوت ديسكورد
+    if BOT_TOKEN:
+        bot.run(BOT_TOKEN)
