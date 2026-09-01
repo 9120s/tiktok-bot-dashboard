@@ -1,4 +1,5 @@
 import os
+import json
 import threading
 import time
 import requests
@@ -7,9 +8,10 @@ import discord
 from discord.ext import commands
 from TikTokLive import TikTokLiveClient
 from TikTokLive.events import CommentEvent, ConnectEvent
+from waitress import serve
 
 # -------------------------------------------------------------------
-# 1. الإعدادات ومتغيرات البيئة
+# 1. الإعدادات وإدارة الحفظ (JSON)
 # -------------------------------------------------------------------
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "mysecretkey12345")
@@ -21,10 +23,25 @@ BOT_TOKEN = os.environ.get("DISCORD_BOT_TOKEN")
 TIKTOK_USERNAME = os.environ.get("TIKTOK_USERNAME", "2vce4")
 
 API_BASE_URL = "https://discord.com/api/v10"
+CONFIG_FILE = "guilds_config.json"
 
-# قاموس لتخزين إعدادات كل سيرفر بناءً على ID السيرفر
-# الهيكل: { guild_id: {"channel_id": "...", "top_title": "..."} }
-GUILDS_CONFIG = {}
+def load_configs():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def save_configs():
+    try:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(GUILDS_CONFIG, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"[Save Error] {e}")
+
+GUILDS_CONFIG = load_configs()
 user_activity = {}
 
 # -------------------------------------------------------------------
@@ -69,7 +86,7 @@ async def send_top_active_users(guild_id):
     return True
 
 # -------------------------------------------------------------------
-# 3. تصميم اللوحة بثيم تيك توك وتدعم التعدد والحفظ المباشر
+# 3. تصميم اللوحة
 # -------------------------------------------------------------------
 DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -81,109 +98,38 @@ DASHBOARD_HTML = """
     <style>
         * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }
         body { background-color: #121212; color: #ffffff; display: flex; height: 100vh; overflow: hidden; }
-        
         .sidebar { width: 260px; background-color: #000000; padding: 25px 20px; display: flex; flex-direction: column; justify-content: space-between; border-left: 1px solid #222222; }
         .brand { font-size: 22px; font-weight: 800; color: #ffffff; margin-bottom: 35px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 10px; }
         .brand i { color: #FE2C55; text-shadow: -2px 0 #25F4EE; }
-        
         .nav-links { list-style: none; }
         .nav-links li { margin-bottom: 12px; }
         .nav-links a { color: #a6a6a6; text-decoration: none; padding: 14px 18px; display: flex; align-items: center; gap: 12px; border-radius: 10px; font-size: 15px; font-weight: 600; transition: all 0.25s ease; cursor: pointer; }
         .nav-links a:hover { color: #ffffff; background: #1a1a1a; }
         .nav-links a.active { background: linear-gradient(90deg, rgba(254,44,85,0.15) 0%, rgba(37,244,238,0.15) 100%); color: #ffffff; border-right: 4px solid #FE2C55; }
         .nav-links a.active i { color: #25F4EE; }
-        
         .main-content { flex: 1; padding: 40px; overflow-y: auto; background-color: #121212; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        
         .card { background-color: #1a1a1a; padding: 30px; border-radius: 16px; max-width: 650px; border: 1px solid #2a2a2a; box-shadow: 0 10px 30px rgba(0,0,0,0.5); margin-bottom: 25px; }
         .form-group { margin-bottom: 22px; text-align: right; }
         label { display: block; margin-bottom: 10px; color: #b0b0b0; font-size: 14px; font-weight: 500; }
-        
-        input[type="text"] {
-            width: 100%;
-            padding: 14px 18px;
-            border-radius: 10px;
-            border: 1px solid #333333;
-            background-color: #000000;
-            color: #ffffff;
-            font-size: 15px;
-            outline: none;
-            transition: 0.2s;
-        }
-
-        .select-wrapper {
-            position: relative;
-            width: 100%;
-        }
-
-        .select-wrapper::after {
-            content: '\\f078';
-            font-family: 'Font Awesome 6 Free';
-            font-weight: 900;
-            position: absolute;
-            left: 18px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #FE2C55;
-            pointer-events: none;
-            font-size: 14px;
-        }
-
-        select { 
-            width: 100%; 
-            padding: 14px 18px; 
-            padding-left: 45px;
-            border-radius: 10px; 
-            border: 1px solid #333333; 
-            background-color: #000000; 
-            color: #ffffff; 
-            font-size: 15px; 
-            outline: none; 
-            transition: 0.2s;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            appearance: none;
-            cursor: pointer;
-            text-align: right;
-            direction: rtl;
-        }
-        
-        select option {
-            background-color: #141414;
-            color: #ffffff;
-            padding: 12px;
-        }
-
-        input[type="text"]:focus, select:focus { 
-            border-color: #25F4EE; 
-            box-shadow: 0 0 8px rgba(37,244,238,0.3); 
-        }
-        
+        input[type="text"], select { width: 100%; padding: 14px 18px; border-radius: 10px; border: 1px solid #333333; background-color: #000000; color: #ffffff; font-size: 15px; outline: none; transition: 0.2s; text-align: right; direction: rtl; }
+        input[type="text"]:focus, select:focus { border-color: #25F4EE; box-shadow: 0 0 8px rgba(37,244,238,0.3); }
         .btn-tiktok { background: linear-gradient(45deg, #FE2C55, #ff4468); color: #ffffff; padding: 14px 24px; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 10px; font-size: 15px; transition: 0.3s; box-shadow: 0 4px 15px rgba(254,44,85,0.3); }
         .btn-tiktok:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(254,44,85,0.5); }
-        
         .btn-cyan { background: #25F4EE; color: #000000; padding: 14px 24px; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 10px; font-size: 15px; transition: 0.3s; }
-        .btn-cyan:hover { background: #1ee0da; transform: translateY(-2px); }
-
         .user-info { display: flex; align-items: center; gap: 14px; padding-top: 20px; border-top: 1px solid #222222; }
         .user-info img { border-radius: 50%; width: 48px; height: 48px; border: 2px solid #FE2C55; }
-
         .leaderboard-list { list-style: none; margin-top: 20px; }
         .leaderboard-item { background: #000000; padding: 18px; border-radius: 12px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #282828; }
         .badge { background: #FE2C55; color: #ffffff; padding: 6px 14px; border-radius: 20px; font-weight: bold; font-size: 13px; }
     </style>
 </head>
 <body>
-
     {% if user %}
     <div class="sidebar">
         <div>
-            <div class="brand">
-                <i class="fa-brands fa-tiktok"></i>
-                <span>TikTok Bot</span>
-            </div>
+            <div class="brand"><i class="fa-brands fa-tiktok"></i><span>TikTok Bot</span></div>
             <ul class="nav-links">
                 <li><a onclick="showTab('settings')" id="nav-settings" class="active"><i class="fa-solid fa-sliders"></i> الإعدادات العامة</a></li>
                 <li><a onclick="showTab('top3')" id="nav-top3"><i class="fa-solid fa-fire"></i> أوب توب البث (Top 3)</a></li>
@@ -205,15 +151,13 @@ DASHBOARD_HTML = """
                 <form action="/save-settings" method="POST">
                     <div class="form-group">
                         <label>اختر السيرفر المراد تعديله:</label>
-                        <div class="select-wrapper">
-                            <select name="guild_id" onchange="window.location.href='/?guild_id=' + this.value">
-                                {% for guild in guilds %}
-                                    <option value="{{ guild.id }}" {% if selected_guild_id == guild.id %}selected{% endif %}>
-                                        {{ guild.name }}
-                                    </option>
-                                {% endfor %}
-                            </select>
-                        </div>
+                        <select name="guild_id" onchange="window.location.href='/?guild_id=' + this.value">
+                            {% for guild in guilds %}
+                                <option value="{{ guild.id }}" {% if selected_guild_id == guild.id %}selected{% endif %}>
+                                    {{ guild.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
                     </div>
                     <div class="form-group">
                         <label>معرف قناة الديسكورد (Channel ID):</label>
@@ -231,7 +175,6 @@ DASHBOARD_HTML = """
         <div id="top3" class="tab-content">
             <h1 style="margin-bottom: 25px; font-weight: 800; font-size: 26px;">🔥 أفضل المتفاعلين في البث</h1>
             <div class="card">
-                <p style="color: #888888; margin-bottom: 15px;">يتم فرز أكثر الأشخاص كتابة للتعليقات تلقائياً من البث المباشر.</p>
                 <ul class="leaderboard-list">
                     {% if top_users %}
                         {% for user, count in top_users %}
@@ -241,14 +184,12 @@ DASHBOARD_HTML = """
                             </li>
                         {% endfor %}
                     {% else %}
-                        <li class="leaderboard-item" style="justify-content: center; color: #777777;">لا يوجد متفاعلين حالياً في البث</li>
+                        <li class="leaderboard-item" style="justify-content: center; color: #777777;">لا يوجد متفاعلين حالياً</li>
                     {% endif %}
                 </ul>
                 <br>
                 {% if selected_guild_id %}
                     <a href="/trigger-top?guild_id={{ selected_guild_id }}" class="btn-cyan"><i class="fa-solid fa-paper-plane"></i> إرسال القائمة لهذا السيرفر</a>
-                {% else %}
-                    <p style="color: #FE2C55;">قم باختيار سيرفر أولاً لإرسال الرسالة إليه.</p>
                 {% endif %}
             </div>
         </div>
@@ -256,11 +197,8 @@ DASHBOARD_HTML = """
     {% else %}
     <div style="margin: auto; text-align: center;">
         <div class="card" style="width: 380px;">
-            <div class="brand" style="margin-bottom: 20px;">
-                <i class="fa-brands fa-tiktok" style="font-size: 32px;"></i>
-                <span style="font-size: 26px;">TikTok Bot</span>
-            </div>
-            <p style="color: #888888; margin-bottom: 25px;">سجل الدخول بواسطة ديسكورد للتحكم باللوحة والإشعارات</p>
+            <div class="brand" style="margin-bottom: 20px;"><i class="fa-brands fa-tiktok" style="font-size: 32px;"></i><span style="font-size: 26px;">TikTok Bot</span></div>
+            <p style="color: #888888; margin-bottom: 25px;">سجل الدخول بواسطة ديسكورد للتحكم باللوحة</p>
             <a href="/login" class="btn-tiktok" style="justify-content: center; width: 100%;"><i class="fa-brands fa-discord"></i> دخول بحساب Discord</a>
         </div>
     </div>
@@ -270,7 +208,6 @@ DASHBOARD_HTML = """
         function showTab(tabName) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.nav-links a').forEach(nav => nav.classList.remove('active'));
-            
             document.getElementById(tabName).classList.add('active');
             document.getElementById('nav-' + tabName).classList.add('active');
         }
@@ -280,7 +217,7 @@ DASHBOARD_HTML = """
 """
 
 # -------------------------------------------------------------------
-# 4. مسارات Flask (Routes)
+# 4. مسارات Flask
 # -------------------------------------------------------------------
 @app.route('/')
 def index():
@@ -329,8 +266,7 @@ def callback():
     }
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     token_res = requests.post(f"{API_BASE_URL}/oauth2/token", data=data, headers=headers)
-    token_json = token_res.json()
-    access_token = token_json.get('access_token')
+    access_token = token_res.json().get('access_token')
 
     if not access_token:
         return redirect('/')
@@ -344,17 +280,9 @@ def callback():
         for g in all_guilds:
             permissions = int(g.get('permissions', 0))
             if (permissions & 0x8) == 0x8 or g.get('owner', False):
-                filtered_guilds.append({
-                    'id': g['id'],
-                    'name': g['name'],
-                    'icon': g.get('icon')
-                })
+                filtered_guilds.append({'id': g['id'], 'name': g['name'], 'icon': g.get('icon')})
 
-    session['user'] = {
-        'id': user_data.get('id'),
-        'username': user_data.get('username'),
-        'avatar': user_data.get('avatar')
-    }
+    session['user'] = {'id': user_data.get('id'), 'username': user_data.get('username'), 'avatar': user_data.get('avatar')}
     session['guilds'] = filtered_guilds
     return redirect('/')
 
@@ -372,6 +300,7 @@ def save_settings():
             "channel_id": request.form.get('channel_id'),
             "top_title": request.form.get('top_title')
         }
+        save_configs()
         return redirect(f'/?guild_id={guild_id}')
         
     return redirect('/')
@@ -389,32 +318,28 @@ def logout():
     return redirect('/')
 
 # -------------------------------------------------------------------
-# 5. دالة منع النوم والتغذية الذاتية (Keep-Alive)
+# 5. تشغيل البوت والخدمات
 # -------------------------------------------------------------------
 def keep_alive():
     url = os.environ.get("RENDER_EXTERNAL_URL")
     if not url:
         return
     while True:
-        time.sleep(600)  # إرسال طلب كل 10 دقائق
+        time.sleep(600)
         try:
             requests.get(url)
-            print("[Keep-Alive] Ping sent successfully.")
-        except Exception as e:
-            print(f"[Keep-Alive Error] {e}")
+        except Exception:
+            pass
 
-# -------------------------------------------------------------------
-# 6. تشغيل الخدمات بالتوازي
-# -------------------------------------------------------------------
 def run_discord_bot():
     if BOT_TOKEN:
         try:
             bot.run(BOT_TOKEN)
         except Exception as e:
-            print(f"[Bot Error] {e}")
+            print(f"[Discord Bot Error] {e}")
 
 if __name__ == '__main__':
     threading.Thread(target=run_discord_bot, daemon=True).start()
     threading.Thread(target=keep_alive, daemon=True).start()
     port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+    serve(app, host='0.0.0.0', port=port)
