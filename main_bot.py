@@ -1,17 +1,17 @@
 import os
 import requests
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, make_response
 from flask_sqlalchemy import SQLAlchemy
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'super-secret-key-2s2')
 
-# إعدادات قاعدة البيانات
+# إعداد قاعدة البيانات
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-# إعدادات Discord OAuth2 (تأكد من إضافتها في Environment Variables على Render لاحقاً)
+# إعدادات Discord OAuth2
 CLIENT_ID = os.environ.get('DISCORD_CLIENT_ID', '')
 CLIENT_SECRET = os.environ.get('DISCORD_CLIENT_SECRET', '')
 REDIRECT_URI = os.environ.get('DISCORD_REDIRECT_URI', 'https://tiktok-bot-2s2-dashboard.onrender.com/callback')
@@ -26,9 +26,11 @@ class Alert(db.Model):
 with app.app_context():
     db.create_all()
 
-# تصفية السيرفرات بناءً على صلاحيات الإدارة لرتبتك (Administrator: 0x8 أو Manage Server: 0x20)
+# دالة لتصفية السيرفرات بناءً على صلاحيات الإدارة للمستخدم (Administrator: 0x8 أو Manage Server: 0x20)
 def filter_manageable_guilds(guilds):
     manageable = []
+    if not guilds or not isinstance(guilds, list):
+        return manageable
     for g in guilds:
         perms = int(g.get('permissions', 0))
         if (perms & 0x8) == 0x8 or (perms & 0x20) == 0x20:
@@ -39,17 +41,17 @@ def filter_manageable_guilds(guilds):
 def index():
     user = session.get('user')
     guilds = session.get('user_guilds', [])
-    filtered_guilds = filter_manageable_guilds(guilds) if guilds else []
+    filtered_guilds = filter_manageable_guilds(guilds)
     alerts = Alert.query.all()
     return render_template('index.html', user=user, guilds=filtered_guilds, alerts=alerts)
 
-# مسار بدء الدخول عبر الديسكورد
+# مسار تسجيل الدخول عبر ديسكورد
 @app.route('/login')
 def login():
     discord_login_url = f"https://discord.com/api/oauth2/authorize?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code&scope=identify%20guilds"
     return redirect(discord_login_url)
 
-# استقبال استجابة الديسكورد وجلب سيرفرات رتبتك
+# استقبال استجابة ديسكورد وجلب البيانات
 @app.route('/callback')
 def callback():
     code = request.args.get('code')
@@ -79,11 +81,13 @@ def callback():
 
     return redirect(url_for('index'))
 
-# تسجيل الخروج الفعلي (مسح الجلسة)
+# مسار تسجيل الخروج الفعلي ومسح الجلسة والكوكيز
 @app.route('/logout')
 def logout():
     session.clear()
-    return redirect(url_for('index'))
+    resp = make_response(redirect(url_for('index')))
+    resp.set_cookie('session', '', expires=0)
+    return resp
 
 @app.route('/add_alert', methods=['POST'])
 def add_alert():
