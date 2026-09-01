@@ -3,517 +3,173 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لوحة التحكم - تنبيهات البث</title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>لوحة التحكم - تنبيهات تيك توك</title>
     <style>
-        :root {
-            --bg-dark: #0f0f13;
-            --sidebar-bg: #16161e;
-            --card-bg: #1e1e2d;
-            --input-bg: #12121a;
-            --accent-pink: #ff0050;
-            --accent-cyan: #00f2fe;
-            --text-main: #f1f5f9;
-            --text-muted: #94a3b8;
-            --border-color: rgba(255, 255, 255, 0.08);
-            --gradient-primary: linear-gradient(135deg, #ff0050 0%, #00f2fe 100%);
-        }
-
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-
         body {
-            background-color: var(--bg-dark);
-            color: var(--text-main);
+            background-color: #1a1a1a;
+            color: #ffffff;
             display: flex;
             min-height: 100vh;
         }
-
-        /* القائمة الجانبية Sidebar */
         .sidebar {
-            width: 260px;
-            background: var(--sidebar-bg);
-            border-left: 1px solid var(--border-color);
+            width: 250px;
+            background-color: #121212;
+            padding: 20px;
             display: flex;
             flex-direction: column;
-            padding: 24px 16px;
-            flex-shrink: 0;
+            justify-content: space-between;
         }
-
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-size: 1.25rem;
-            font-weight: 700;
-            margin-bottom: 32px;
-            padding: 0 8px;
+        .sidebar h2 {
+            color: #ff0050;
+            margin-bottom: 30px;
+            font-size: 20px;
         }
-
-        .brand i {
-            color: var(--accent-pink);
-            font-size: 1.5rem;
-            filter: drop-shadow(0 0 8px rgba(255, 0, 80, 0.6));
-        }
-
-        .nav-menu {
-            list-style: none;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .nav-link {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 16px;
-            color: var(--text-muted);
+        .menu-item {
+            display: block;
+            padding: 12px 15px;
+            color: #aaa;
             text-decoration: none;
-            border-radius: 12px;
-            font-weight: 600;
-            transition: all 0.2s ease;
-            cursor: pointer;
-            user-select: none;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            transition: 0.3s;
         }
-
-        .nav-link:hover, .nav-link.active {
-            background: rgba(255, 0, 80, 0.1);
-            color: var(--text-main);
-            border-right: 3px solid var(--accent-pink);
+        .menu-item:hover, .menu-item.active {
+            background-color: #2a2a2a;
+            color: #fff;
         }
-
-        .nav-link.active i {
-            color: var(--accent-pink);
+        .logout-btn {
+            background-color: #ff0050;
+            color: white;
+            text-align: center;
+            padding: 10px;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: bold;
+            display: block;
+            margin-top: 20px;
         }
-
-        .divider {
-            height: 1px;
-            background: var(--border-color);
-            margin: 16px 0;
+        .logout-btn:hover {
+            background-color: #e00047;
         }
-
-        .logout-link {
-            color: #ef4444;
-            margin-top: auto;
-        }
-
-        .logout-link:hover {
-            background: rgba(239, 68, 68, 0.1);
-            border-right-color: #ef4444;
-        }
-
-        /* المحتوى الرئيسي - تم التعديل لتوسيط العناصر بالكامل */
-        .main-content {
+        .content {
             flex: 1;
             padding: 40px;
             display: flex;
             justify-content: center;
             align-items: flex-start;
         }
-
-        .tab-content {
-            display: none;
-            width: 100%;
-            max-width: 800px;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
         .card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            padding: 32px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            position: relative;
-            overflow: hidden;
-            margin: 0 auto 24px auto;
+            background: #242424;
+            padding: 30px;
+            border-radius: 12px;
             width: 100%;
+            max-width: 500px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            border: 1px solid #333;
         }
-
-        .card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 2px;
-            background: var(--gradient-primary);
-        }
-
-        .card-title {
-            font-size: 1.4rem;
-            font-weight: 700;
-            margin-bottom: 24px;
+        .card h3 {
+            margin-bottom: 20px;
+            color: #00f2fe;
             display: flex;
             align-items: center;
             gap: 10px;
         }
-
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 18px;
         }
-
-        .form-label {
+        .form-group label {
             display: block;
-            font-size: 0.875rem;
-            font-weight: 600;
-            color: var(--text-muted);
             margin-bottom: 8px;
+            color: #ccc;
+            font-size: 14px;
         }
-
-        .form-input, .form-select {
+        .form-control {
             width: 100%;
-            padding: 12px 16px;
-            background: var(--input-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            color: var(--text-main);
-            font-size: 0.95rem;
+            padding: 12px;
+            background-color: #1a1a1a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 14px;
+        }
+        .form-control:focus {
             outline: none;
-            transition: border-color 0.2s ease;
+            border-color: #00f2fe;
         }
-
-        .form-input:focus, .form-select:focus {
-            border-color: var(--accent-cyan);
-            box-shadow: 0 0 10px rgba(0, 242, 254, 0.2);
-        }
-
-        /* عناصر المفاتيح وقوائم الإعدادات */
-        .setting-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 16px 0;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .setting-item:last-child {
-            border-bottom: none;
-        }
-
-        .setting-info h4 {
-            font-size: 1rem;
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
-
-        .setting-info p {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-        }
-
-        /* تصميم منصة تفاعل البثوث */
-        .podium-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 20px;
-            margin-top: 15px;
-        }
-
-        .podium-top {
-            width: 60%;
-            display: flex;
-            justify-content: center;
-        }
-
-        .podium-bottom {
-            width: 100%;
-            display: flex;
-            gap: 20px;
-            justify-content: center;
-        }
-
-        .podium-card {
-            background: var(--input-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 14px;
-            padding: 20px;
-            text-align: center;
-            width: 100%;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-            transition: transform 0.2s ease;
-        }
-
-        .podium-card:hover {
-            transform: translateY(-3px);
-        }
-
-        .podium-card.rank-1 {
-            border-color: #ffd700;
-            background: rgba(255, 215, 0, 0.03);
-        }
-
-        .podium-card.rank-2 {
-            border-color: #c0c0c0;
-        }
-
-        .podium-card.rank-3 {
-            border-color: #cd7f32;
-        }
-
-        .podium-badge {
-            display: inline-block;
-            font-weight: 700;
-            font-size: 0.9rem;
-            padding: 4px 12px;
-            border-radius: 20px;
-            margin-bottom: 10px;
-        }
-
-        .switch {
-            position: relative;
-            display: inline-block;
-            width: 48px;
-            height: 26px;
-        }
-
-        .switch input {
-            opacity: 0;
-            width: 0;
-            height: 0;
-        }
-
-        .slider {
-            position: absolute;
-            cursor: pointer;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background-color: var(--input-bg);
-            border: 1px solid var(--border-color);
-            transition: .3s;
-            border-radius: 34px;
-        }
-
-        .slider:before {
-            position: absolute;
-            content: "";
-            height: 18px;
-            width: 18px;
-            left: 3px;
-            bottom: 3px;
-            background-color: var(--text-muted);
-            transition: .3s;
-            border-radius: 50%;
-        }
-
-        input:checked + .slider {
-            background-color: var(--accent-pink);
-            border-color: var(--accent-pink);
-        }
-
-        input:checked + .slider:before {
-            transform: translateX(22px);
-            background-color: #fff;
-        }
-
         .btn-submit {
             width: 100%;
-            padding: 14px;
-            background: var(--gradient-primary);
-            color: #fff;
+            padding: 12px;
+            background: linear-gradient(90deg, #ff0050, #00f2fe);
             border: none;
-            border-radius: 10px;
-            font-size: 1rem;
-            font-weight: 700;
+            border-radius: 8px;
+            color: white;
+            font-weight: bold;
             cursor: pointer;
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            margin-top: 10px;
+            font-size: 16px;
+            transition: 0.3s;
         }
-
         .btn-submit:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(255, 0, 80, 0.4);
+            opacity: 0.9;
         }
     </style>
 </head>
 <body>
 
-    <!-- القائمة الجانبية -->
-    <aside class="sidebar">
-        <div class="brand">
-            <i class="fa-brands fa-tiktok"></i>
-            <span>تنبيهات البث</span>
+    <div class="sidebar">
+        <div>
+            <h2>تنبيهات البث</h2>
+            <a href="/" class="menu-item active">إضافة تنبيه</a>
         </div>
-        <ul class="nav-menu">
-            <li><div class="nav-link active" onclick="switchTab(event, 'add')"><i class="fa-solid fa-plus-circle"></i> إضافة تنبيه</div></li>
-            <li><div class="nav-link" onclick="switchTab(event, 'list')"><i class="fa-solid fa-bell"></i> التنبيهات المفعلة</div></li>
-            <li><div class="nav-link" onclick="switchTab(event, 'stats')"><i class="fa-solid fa-chart-line"></i> تفاعل البثوث</div></li>
-            <li><div class="nav-link" onclick="switchTab(event, 'settings')"><i class="fa-solid fa-gear"></i> الإعدادات</div></li>
-            <div class="divider"></div>
-            <li><a href="/logout" class="nav-link logout-link"><i class="fa-solid fa-right-from-bracket"></i> تسجيل الخروج</a></li>
-        </ul>
-    </aside>
+        
+        <div>
+            {% if user %}
+                <p style="color: #888; margin-bottom: 10px;">أهلاً، {{ user['username'] }}</p>
+                <!-- رابط تسجيل الخروج الفعلي المربوط بالمسار /logout -->
+                <a href="/logout" class="logout-btn">تسجيل الخروج</a>
+            {% else %}
+                <a href="/login" class="logout-btn" style="background-color: #5865F2;">تسجيل الدخول بالديسكورد</a>
+            {% endif %}
+        </div>
+    </div>
 
-    <!-- المحتوى الرئيسي -->
-    <main class="main-content">
-
-        <!-- 1. تبويب إضافة تنبيه -->
-        <div id="tab-add" class="tab-content active">
-            <div class="card">
-                <h2 class="card-title"><i class="fa-solid fa-plus-circle" style="color: var(--accent-pink);"></i> إضافة تنبيه جديد</h2>
-                <form action="/add" method="POST">
-                    <div class="form-group">
-                        <label class="form-label">اختر السيرفر:</label>
-                        <select name="guild_id" class="form-select">
+    <div class="content">
+        <div class="card">
+            <h3>إضافة تنبيه جديد</h3>
+            <form action="/add_alert" method="POST">
+                
+                <div class="form-group">
+                    <label for="guild_id">اختر السيرفر (السيرفرات برتبتك فقط):</label>
+                    <select name="guild_id" id="guild_id" class="form-control" required>
+                        {% if guilds %}
                             {% for guild in guilds %}
-                                <option value="{{ guild.id }}">{{ guild.name }}</option>
+                                <option value="{{ guild['id'] }}">{{ guild['name'] }}</option>
                             {% endfor %}
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">معرف روم الديسكورد (Channel ID):</label>
-                        <input type="text" name="channel_id" class="form-input" placeholder="أدخل رقم روم الإشعارات..." required>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">يوزر التيك توك (بدون @):</label>
-                        <input type="text" name="tiktok_username" class="form-input" placeholder="مثال: 2vce4" required>
-                    </div>
-                    <button type="submit" class="btn-submit"><i class="fa-solid fa-floppy-disk"></i> حفظ التنبيه</button>
-                </form>
-            </div>
-        </div>
-
-        <!-- 2. تبويب التنبيهات المفعلة -->
-        <div id="tab-list" class="tab-content">
-            <div class="card">
-                <h2 class="card-title"><i class="fa-solid fa-bell" style="color: var(--accent-cyan);"></i> التنبيهات المفعلة</h2>
-                {% if subscriptions %}
-                    {% for sub in subscriptions %}
-                        <div class="setting-item">
-                            <div class="setting-info">
-                                <h4>@{{ sub[2] }}</h4>
-                                <p>السيرفر: {{ sub[0] }} | الروم: {{ sub[1] }}</p>
-                            </div>
-                            <form action="/delete/{{ sub[0] }}/{{ sub[2] }}" method="POST">
-                                <button type="submit" style="background: #ef4444; color: #fff; border: none; padding: 8px 16px; border-radius: 8px; cursor: pointer;">حذف</button>
-                            </form>
-                        </div>
-                    {% endfor %}
-                {% else %}
-                    <p style="color: var(--text-muted);">لا توجد تنبيهات مفعلة حالياً.</p>
-                {% endif %}
-            </div>
-        </div>
-
-        <!-- 3. تبويب تفاعل البثوث -->
-        <div id="tab-stats" class="tab-content">
-            <div class="card">
-                <h2 class="card-title"><i class="fa-solid fa-trophy" style="color: #ffd700;"></i> أفضل 3 حسابات في تفاعل البثوث</h2>
-                
-                <div class="podium-container">
-                    <!-- المركز الأول -->
-                    <div class="podium-top">
-                        <div class="podium-card rank-1">
-                            <span class="podium-badge" style="background: rgba(255, 215, 0, 0.15); color: #ffd700;">🥇 المركز الأول</span>
-                            <h3 style="font-size: 1.2rem; font-weight: 700; margin-bottom: 6px;"><i class="fa-solid fa-crown" style="color: #ffd700;"></i> @2vce4</h3>
-                            <p style="font-size: 0.85rem; color: var(--text-muted);">إجمالي البثوث: 24 بث</p>
-                            <p style="font-size: 0.85rem; color: var(--accent-cyan); font-weight: 600; margin-top: 4px;">معدل التفاعل: ممتاز جداً 🔥</p>
-                        </div>
-                    </div>
-
-                    <!-- المركز الثاني والثالث -->
-                    <div class="podium-bottom">
-                        <div class="podium-card rank-2">
-                            <span class="podium-badge" style="background: rgba(192, 192, 192, 0.15); color: #c0c0c0;">🥈 المركز الثاني</span>
-                            <h4 style="font-size: 1.05rem; font-weight: 700; margin-bottom: 6px;"><i class="fa-solid fa-medal" style="color: #c0c0c0;"></i> @streamer_two</h4>
-                            <p style="font-size: 0.8rem; color: var(--text-muted);">إجمالي البثوث: 15 بث</p>
-                            <p style="font-size: 0.8rem; color: var(--text-main); font-weight: 600; margin-top: 4px;">معدل التفاعل: مرتفع ⚡</p>
-                        </div>
-
-                        <div class="podium-card rank-3">
-                            <span class="podium-badge" style="background: rgba(205, 127, 50, 0.15); color: #cd7f32;">🥉 المركز الثالث</span>
-                            <h4 style="font-size: 1.05rem; font-weight: 700; margin-bottom: 6px;"><i class="fa-solid fa-award" style="color: #cd7f32;"></i> @streamer_three</h4>
-                            <p style="font-size: 0.8rem; color: var(--text-muted);">إجمالي البثوث: 9 بثوث</p>
-                            <p style="font-size: 0.8rem; color: var(--text-main); font-weight: 600; margin-top: 4px;">معدل التفاعل: جيد 👍</p>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-        </div>
-
-        <!-- 4. تبويب الإعدادات العامة -->
-        <div id="tab-settings" class="tab-content">
-            <div class="card">
-                <h2 class="card-title"><i class="fa-solid fa-sliders" style="color: var(--accent-pink);"></i> إعدادات النظام العامة</h2>
-                
-                <div class="setting-item">
-                    <div class="setting-info">
-                        <h4>التنبيهات الفورية</h4>
-                        <p>إرسال منشن (@everyone) عند بدء البث المباشر</p>
-                    </div>
-                    <label class="switch">
-                        <input type="checkbox" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-info">
-                        <h4>وضع الصيانة</h4>
-                        <p>إيقاف إرسال الإشعارات مؤقتاً بدون حذف التنبيهات</p>
-                    </div>
-                    <label class="switch">
-                        <input type="checkbox">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-info">
-                        <h4>إرسال رابط البث المباشر</h4>
-                        <p>تضمين رابط القناة المباشر في الرسالة الموجهة للديسكورد</p>
-                    </div>
-                    <label class="switch">
-                        <input type="checkbox" checked>
-                        <span class="slider"></span>
-                    </label>
-                </div>
-            </div>
-
-            <div class="card">
-                <h2 class="card-title"><i class="fa-solid fa-robot" style="color: var(--accent-cyan);"></i> إعدادات البوت والسرعة</h2>
-                
-                <div class="form-group">
-                    <label class="form-label">معدل الفحص التلقائي (بالثواني):</label>
-                    <input type="number" class="form-input" value="30" min="10" max="300">
+                        {% else %}
+                            <option value="">لا توجد سيرفرات تملك فيها صلاحيات أدمن</option>
+                        {% endif %}
+                    </select>
                 </div>
 
                 <div class="form-group">
-                    <label class="form-label">صيغة رسالة التنبيه:</label>
-                    <input type="text" class="form-input" value="🚨 الحساب @{username} بدأ بث مباشر الآن على TikTok!">
+                    <label for="channel_id">معرف روم الديسكورد (Channel ID):</label>
+                    <input type="text" name="channel_id" id="channel_id" class="form-control" placeholder="أدخل رقم روم الإشعارات..." required>
                 </div>
 
-                <button class="btn-submit"><i class="fa-solid fa-check-circle"></i> حفظ الإعدادات</button>
-            </div>
+                <div class="form-group">
+                    <label for="tiktok_username">يوزر التيك توك (بدون @):</label>
+                    <input type="text" name="tiktok_username" id="tiktok_username" class="form-control" placeholder="مثال: 2vce4" required>
+                </div>
+
+                <button type="submit" class="btn-submit">حفظ التنبيه</button>
+            </form>
         </div>
+    </div>
 
-    </main>
-
-    <script>
-        function switchTab(evt, tabName) {
-            const tabContents = document.getElementsByClassName("tab-content");
-            for (let i = 0; i < tabContents.length; i++) {
-                tabContents[i].classList.remove("active");
-            }
-
-            const navLinks = document.getElementsByClassName("nav-link");
-            for (let i = 0; i < navLinks.length; i++) {
-                navLinks[i].classList.remove("active");
-            }
-
-            document.getElementById("tab-" + tabName).classList.add("active");
-            evt.currentTarget.classList.add("active");
-        }
-    </script>
 </body>
 </html>
