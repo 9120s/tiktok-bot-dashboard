@@ -8,7 +8,7 @@ from TikTokLive import TikTokLiveClient
 from TikTokLive.events import CommentEvent, ConnectEvent
 
 # -------------------------------------------------------------------
-# 1. الإعدادات والمتغيرات
+# 1. الإعدادات ومتغيرات البيئة
 # -------------------------------------------------------------------
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "mysecretkey12345")
@@ -21,10 +21,9 @@ TIKTOK_USERNAME = os.environ.get("TIKTOK_USERNAME", "2vce4")
 
 API_BASE_URL = "https://discord.com/api/v10"
 
-CONFIG = {
-    "channel_id": None,
-    "top_title": "🏆 أفضل 3 متفاعلين في البث الحالي"
-}
+# قاموس لتخزين إعدادات كل سيرفر بناءً على ID السيرفر
+# الهيكل: { guild_id: {"channel_id": "...", "top_title": "..."} }
+GUILDS_CONFIG = {}
 user_activity = {}
 
 # -------------------------------------------------------------------
@@ -45,16 +44,17 @@ async def on_comment(event: CommentEvent):
     user = event.user.nickname or event.user.unique_id
     user_activity[user] = user_activity.get(user, 0) + 1
 
-async def send_top_active_users():
-    if not CONFIG["channel_id"]:
+async def send_top_active_users(guild_id):
+    config = GUILDS_CONFIG.get(str(guild_id))
+    if not config or not config.get("channel_id"):
         return False
 
-    channel = bot.get_channel(int(CONFIG["channel_id"]))
+    channel = bot.get_channel(int(config["channel_id"]))
     if not channel or not user_activity:
         return False
 
     sorted_users = sorted(user_activity.items(), key=lambda x: x[1], reverse=True)[:3]
-    embed = discord.Embed(title=CONFIG["top_title"], color=discord.Color.from_rgb(254, 44, 85))
+    embed = discord.Embed(title=config.get("top_title", "🏆 أفضل المتفاعلين"), color=discord.Color.from_rgb(254, 44, 85))
     medals = ["🥇 المركز الأول", "🥈 المركز الثاني", "🥉 المركز الثالث"]
     
     for idx, (username, count) in enumerate(sorted_users):
@@ -68,7 +68,7 @@ async def send_top_active_users():
     return True
 
 # -------------------------------------------------------------------
-# 3. تصميم اللوحة بثيم تيك توك (TikTok Theme Dashboard)
+# 3. تصميم اللوحة بثيم تيك توك وتدعم التعدد
 # -------------------------------------------------------------------
 DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -81,7 +81,6 @@ DASHBOARD_HTML = """
         * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }
         body { background-color: #121212; color: #ffffff; display: flex; height: 100vh; overflow: hidden; }
         
-        /* القائمة الجانبية بتنسيق تيك توك */
         .sidebar { width: 260px; background-color: #000000; padding: 25px 20px; display: flex; flex-direction: column; justify-content: space-between; border-left: 1px solid #222222; }
         .brand { font-size: 22px; font-weight: 800; color: #ffffff; margin-bottom: 35px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 10px; }
         .brand i { color: #FE2C55; text-shadow: -2px 0 #25F4EE; }
@@ -93,7 +92,6 @@ DASHBOARD_HTML = """
         .nav-links a.active { background: linear-gradient(90deg, rgba(254,44,85,0.15) 0%, rgba(37,244,238,0.15) 100%); color: #ffffff; border-right: 4px solid #FE2C55; }
         .nav-links a.active i { color: #25F4EE; }
         
-        /* المحتوى الرئيسي */
         .main-content { flex: 1; padding: 40px; overflow-y: auto; background-color: #121212; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
@@ -101,10 +99,67 @@ DASHBOARD_HTML = """
         .card { background-color: #1a1a1a; padding: 30px; border-radius: 16px; max-width: 650px; border: 1px solid #2a2a2a; box-shadow: 0 10px 30px rgba(0,0,0,0.5); margin-bottom: 25px; }
         .form-group { margin-bottom: 22px; text-align: right; }
         label { display: block; margin-bottom: 10px; color: #b0b0b0; font-size: 14px; font-weight: 500; }
-        input[type="text"], select { width: 100%; padding: 14px; border-radius: 10px; border: 1px solid #333333; background: #000000; color: #ffffff; font-size: 15px; outline: none; transition: 0.2s; }
-        input[type="text"]:focus, select:focus { border-color: #25F4EE; box-shadow: 0 0 8px rgba(37,244,238,0.3); }
         
-        /* أزرار الثيم */
+        input[type="text"] {
+            width: 100%;
+            padding: 14px 18px;
+            border-radius: 10px;
+            border: 1px solid #333333;
+            background-color: #000000;
+            color: #ffffff;
+            font-size: 15px;
+            outline: none;
+            transition: 0.2s;
+        }
+
+        .select-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .select-wrapper::after {
+            content: '\\f078';
+            font-family: 'Font Awesome 6 Free';
+            font-weight: 900;
+            position: absolute;
+            left: 18px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #FE2C55;
+            pointer-events: none;
+            font-size: 14px;
+        }
+
+        select { 
+            width: 100%; 
+            padding: 14px 18px; 
+            padding-left: 45px;
+            border-radius: 10px; 
+            border: 1px solid #333333; 
+            background-color: #000000; 
+            color: #ffffff; 
+            font-size: 15px; 
+            outline: none; 
+            transition: 0.2s;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            cursor: pointer;
+            text-align: right;
+            direction: rtl;
+        }
+        
+        select option {
+            background-color: #141414;
+            color: #ffffff;
+            padding: 12px;
+        }
+
+        input[type="text"]:focus, select:focus { 
+            border-color: #25F4EE; 
+            box-shadow: 0 0 8px rgba(37,244,238,0.3); 
+        }
+        
         .btn-tiktok { background: linear-gradient(45deg, #FE2C55, #ff4468); color: #ffffff; padding: 14px 24px; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 10px; font-size: 15px; transition: 0.3s; box-shadow: 0 4px 15px rgba(254,44,85,0.3); }
         .btn-tiktok:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(254,44,85,0.5); }
         
@@ -122,7 +177,6 @@ DASHBOARD_HTML = """
 <body>
 
     {% if user %}
-    <!-- القائمة الجانبية -->
     <div class="sidebar">
         <div>
             <div class="brand">
@@ -143,35 +197,37 @@ DASHBOARD_HTML = """
         </div>
     </div>
 
-    <!-- المحتوى الرئيسي -->
     <div class="main-content">
-        <!-- تبويب الإعدادات -->
         <div id="settings" class="tab-content active">
             <h1 style="margin-bottom: 25px; font-weight: 800; font-size: 26px;">⚙️ إعدادات البوت والربط</h1>
             <div class="card">
                 <form action="/save-settings" method="POST">
                     <div class="form-group">
-                        <label>اختر السيرفر:</label>
-                        <select name="guild_id">
-                            {% for guild in guilds %}
-                                <option value="{{ guild.id }}">{{ guild.name }}</option>
-                            {% endfor %}
-                        </select>
+                        <label>اختر السيرفر المراد تعديله:</label>
+                        <div class="select-wrapper">
+                            <select name="guild_id" onchange="window.location.href='/?guild_id=' + this.value">
+                                <option value="" disabled {% if not selected_guild_id %}selected{% endif %}>-- اختر سيرفر --</option>
+                                {% for guild in guilds %}
+                                    <option value="{{ guild.id }}" {% if selected_guild_id == guild.id %}selected{% endif %}>
+                                        {{ guild.name }}
+                                    </option>
+                                {% endfor %}
+                            </select>
+                        </div>
                     </div>
                     <div class="form-group">
                         <label>معرف قناة الديسكورد (Channel ID):</label>
-                        <input type="text" name="channel_id" value="{{ config.channel_id or '' }}" placeholder="123456789012345678" required>
+                        <input type="text" name="channel_id" value="{{ current_config.channel_id or '' }}" placeholder="123456789012345678" required>
                     </div>
                     <div class="form-group">
                         <label>عنوان رسالة التفاعل:</label>
-                        <input type="text" name="top_title" value="{{ config.top_title }}" required>
+                        <input type="text" name="top_title" value="{{ current_config.top_title or '🏆 أفضل 3 متفاعلين في البث الحالي' }}" required>
                     </div>
-                    <button type="submit" class="btn-tiktok"><i class="fa-solid fa-check"></i> حفظ الإعدادات</button>
+                    <button type="submit" class="btn-tiktok"><i class="fa-solid fa-check"></i> حفظ إعدادات السيرفر</button>
                 </form>
             </div>
         </div>
 
-        <!-- تبويب أفضل 3 متفاعلين -->
         <div id="top3" class="tab-content">
             <h1 style="margin-bottom: 25px; font-weight: 800; font-size: 26px;">🔥 أفضل المتفاعلين في البث</h1>
             <div class="card">
@@ -189,12 +245,15 @@ DASHBOARD_HTML = """
                     {% endif %}
                 </ul>
                 <br>
-                <a href="/trigger-top" class="btn-cyan"><i class="fa-solid fa-paper-plane"></i> إرسال القائمة للديسكورد الآن</a>
+                {% if selected_guild_id %}
+                    <a href="/trigger-top?guild_id={{ selected_guild_id }}" class="btn-cyan"><i class="fa-solid fa-paper-plane"></i> إرسال القائمة لهذا السيرفر</a>
+                {% else %}
+                    <p style="color: #FE2C55;">قم باختيار سيرفر أولاً لإرسال الرسالة إليه.</p>
+                {% endif %}
             </div>
         </div>
     </div>
     {% else %}
-    <!-- صفحة تسجيل الدخول -->
     <div style="margin: auto; text-align: center;">
         <div class="card" style="width: 380px;">
             <div class="brand" style="margin-bottom: 20px;">
@@ -225,12 +284,21 @@ DASHBOARD_HTML = """
 # -------------------------------------------------------------------
 @app.route('/')
 def index():
+    user_guilds = session.get('guilds', [])
+    selected_guild_id = request.args.get('guild_id')
+    
+    if not selected_guild_id and user_guilds:
+        selected_guild_id = user_guilds[0]['id']
+        
+    current_config = GUILDS_CONFIG.get(str(selected_guild_id), {})
     top_users = sorted(user_activity.items(), key=lambda x: x[1], reverse=True)[:3] if user_activity else []
+
     return render_template_string(
         DASHBOARD_HTML,
         user=session.get('user'),
-        guilds=session.get('guilds', []),
-        config=CONFIG,
+        guilds=user_guilds,
+        selected_guild_id=selected_guild_id,
+        current_config=current_config,
         top_users=top_users
     )
 
@@ -271,7 +339,6 @@ def callback():
     user_data = requests.get(f"{API_BASE_URL}/users/@me", headers=user_headers).json()
     all_guilds = requests.get(f"{API_BASE_URL}/users/@me/guilds", headers=user_headers).json()
 
-    # تصفية السيرفرات لمنع مشكلة حجم الكوكي
     filtered_guilds = []
     if isinstance(all_guilds, list):
         for g in all_guilds:
@@ -296,15 +363,20 @@ def save_settings():
     if 'user' not in session:
         return redirect('/login')
 
-    CONFIG["top_title"] = request.form.get('top_title')
-    CONFIG["channel_id"] = request.form.get('channel_id')
-    return redirect('/')
+    guild_id = request.form.get('guild_id')
+    if guild_id:
+        GUILDS_CONFIG[str(guild_id)] = {
+            "channel_id": request.form.get('channel_id'),
+            "top_title": request.form.get('top_title')
+        }
+    return redirect(f'/?guild_id={guild_id}')
 
 @app.route('/trigger-top')
 def trigger_top():
-    if 'user' in session and bot.loop:
-        bot.loop.create_task(send_top_active_users())
-    return redirect('/')
+    guild_id = request.args.get('guild_id')
+    if 'user' in session and bot.loop and guild_id:
+        bot.loop.create_task(send_top_active_users(guild_id))
+    return redirect(f'/?guild_id={guild_id}')
 
 @app.route('/logout')
 def logout():
@@ -314,11 +386,14 @@ def logout():
 # -------------------------------------------------------------------
 # 5. تشغيل الخدمات بالتوازي
 # -------------------------------------------------------------------
-def run_flask():
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+def run_discord_bot():
+    if BOT_TOKEN:
+        try:
+            bot.run(BOT_TOKEN)
+        except Exception as e:
+            print(f"[Bot Error] {e}")
 
 if __name__ == '__main__':
-    threading.Thread(target=run_flask, daemon=True).start()
-    if BOT_TOKEN:
-        bot.run(BOT_TOKEN)
+    threading.Thread(target=run_discord_bot, daemon=True).start()
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
