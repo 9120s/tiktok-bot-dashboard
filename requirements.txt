@@ -1,5 +1,4 @@
 Flask
 discord.py
-TikTokLive
 requests
 waitress
