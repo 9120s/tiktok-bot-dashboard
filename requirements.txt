@@ -1,4 +1,4 @@
 Flask
 discord.py
 requests
-
+waitress
