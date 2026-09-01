@@ -54,7 +54,7 @@ async def send_top_active_users():
         return False
 
     sorted_users = sorted(user_activity.items(), key=lambda x: x[1], reverse=True)[:3]
-    embed = discord.Embed(title=CONFIG["top_title"], color=discord.Color.gold())
+    embed = discord.Embed(title=CONFIG["top_title"], color=discord.Color.from_rgb(254, 44, 85))
     medals = ["🥇 المركز الأول", "🥈 المركز الثاني", "🥉 المركز الثالث"]
     
     for idx, (username, count) in enumerate(sorted_users):
@@ -68,47 +68,55 @@ async def send_top_active_users():
     return True
 
 # -------------------------------------------------------------------
-# 3. تصميم اللوحة بالقوائم الجانبية (Sidebar HTML/CSS)
+# 3. تصميم اللوحة بثيم تيك توك (TikTok Theme Dashboard)
 # -------------------------------------------------------------------
 DASHBOARD_HTML = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>لوحة تحكم البوت</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <title>TikTok Dashboard</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
         * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }
-        body { background-color: #1e1e2e; color: #cdd6f4; display: flex; height: 100vh; }
+        body { background-color: #121212; color: #ffffff; display: flex; height: 100vh; overflow: hidden; }
         
-        /* القائمة الجانبية */
-        .sidebar { width: 260px; background-color: #181825; padding: 20px; display: flex; flex-direction: column; justify-content: space-between; border-left: 1px solid #313244; }
-        .sidebar h2 { font-size: 20px; color: #cba6f7; margin-bottom: 30px; text-align: center; }
+        /* القائمة الجانبية بتنسيق تيك توك */
+        .sidebar { width: 260px; background-color: #000000; padding: 25px 20px; display: flex; flex-direction: column; justify-content: space-between; border-left: 1px solid #222222; }
+        .brand { font-size: 22px; font-weight: 800; color: #ffffff; margin-bottom: 35px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .brand i { color: #FE2C55; text-shadow: -2px 0 #25F4EE; }
+        
         .nav-links { list-style: none; }
-        .nav-links li { margin-bottom: 10px; }
-        .nav-links a { color: #a6adc8; text-decoration: none; padding: 12px 15px; display: flex; align-items: center; gap: 10px; border-radius: 8px; transition: 0.3s; cursor: pointer; }
-        .nav-links a:hover, .nav-links a.active { background-color: #313244; color: #89b4fa; }
+        .nav-links li { margin-bottom: 12px; }
+        .nav-links a { color: #a6a6a6; text-decoration: none; padding: 14px 18px; display: flex; align-items: center; gap: 12px; border-radius: 10px; font-size: 15px; font-weight: 600; transition: all 0.25s ease; cursor: pointer; }
+        .nav-links a:hover { color: #ffffff; background: #1a1a1a; }
+        .nav-links a.active { background: linear-gradient(90deg, rgba(254,44,85,0.15) 0%, rgba(37,244,238,0.15) 100%); color: #ffffff; border-right: 4px solid #FE2C55; }
+        .nav-links a.active i { color: #25F4EE; }
         
         /* المحتوى الرئيسي */
-        .main-content { flex: 1; padding: 40px; overflow-y: auto; }
+        .main-content { flex: 1; padding: 40px; overflow-y: auto; background-color: #121212; }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
         
-        .card { background-color: #313244; padding: 25px; border-radius: 12px; max-width: 600px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); margin-bottom: 20px; }
-        .form-group { margin-bottom: 20px; text-align: right; }
-        label { display: block; margin-bottom: 8px; color: #bac2de; font-size: 14px; }
-        input[type="text"], select { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #45475a; background: #1e1e2e; color: #cdd6f4; outline: none; }
+        .card { background-color: #1a1a1a; padding: 30px; border-radius: 16px; max-width: 650px; border: 1px solid #2a2a2a; box-shadow: 0 10px 30px rgba(0,0,0,0.5); margin-bottom: 25px; }
+        .form-group { margin-bottom: 22px; text-align: right; }
+        label { display: block; margin-bottom: 10px; color: #b0b0b0; font-size: 14px; font-weight: 500; }
+        input[type="text"], select { width: 100%; padding: 14px; border-radius: 10px; border: 1px solid #333333; background: #000000; color: #ffffff; font-size: 15px; outline: none; transition: 0.2s; }
+        input[type="text"]:focus, select:focus { border-color: #25F4EE; box-shadow: 0 0 8px rgba(37,244,238,0.3); }
         
-        .btn { background-color: #89b4fa; color: #11111b; padding: 12px 20px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
-        .btn:hover { background-color: #b4befe; }
-        .btn-danger { background-color: #f38ba8; color: #11111b; }
+        /* أزرار الثيم */
+        .btn-tiktok { background: linear-gradient(45deg, #FE2C55, #ff4468); color: #ffffff; padding: 14px 24px; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 10px; font-size: 15px; transition: 0.3s; box-shadow: 0 4px 15px rgba(254,44,85,0.3); }
+        .btn-tiktok:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(254,44,85,0.5); }
         
-        .user-info { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
-        .user-info img { border-radius: 50%; width: 45px; height: 45px; }
+        .btn-cyan { background: #25F4EE; color: #000000; padding: 14px 24px; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 10px; font-size: 15px; transition: 0.3s; }
+        .btn-cyan:hover { background: #1ee0da; transform: translateY(-2px); }
 
-        .leaderboard-list { list-style: none; margin-top: 15px; }
-        .leaderboard-item { background: #1e1e2e; padding: 15px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
-        .badge { background: #f9e2af; color: #11111b; padding: 4px 10px; border-radius: 12px; font-weight: bold; font-size: 12px; }
+        .user-info { display: flex; align-items: center; gap: 14px; padding-top: 20px; border-top: 1px solid #222222; }
+        .user-info img { border-radius: 50%; width: 48px; height: 48px; border: 2px solid #FE2C55; }
+
+        .leaderboard-list { list-style: none; margin-top: 20px; }
+        .leaderboard-item { background: #000000; padding: 18px; border-radius: 12px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #282828; }
+        .badge { background: #FE2C55; color: #ffffff; padding: 6px 14px; border-radius: 20px; font-weight: bold; font-size: 13px; }
     </style>
 </head>
 <body>
@@ -117,17 +125,20 @@ DASHBOARD_HTML = """
     <!-- القائمة الجانبية -->
     <div class="sidebar">
         <div>
-            <h2><i class="fa-brands fa-tiktok"></i> لوحة تيك توك</h2>
+            <div class="brand">
+                <i class="fa-brands fa-tiktok"></i>
+                <span>TikTok Bot</span>
+            </div>
             <ul class="nav-links">
-                <li><a onclick="showTab('settings')" id="nav-settings" class="active"><i class="fa-solid fa-gear"></i> الإعدادات العامة</a></li>
-                <li><a onclick="showTab('top3')" id="nav-top3"><i class="fa-solid fa-trophy"></i> أفضل 3 متفاعلين</a></li>
+                <li><a onclick="showTab('settings')" id="nav-settings" class="active"><i class="fa-solid fa-sliders"></i> الإعدادات العامة</a></li>
+                <li><a onclick="showTab('top3')" id="nav-top3"><i class="fa-solid fa-fire"></i> أوب توب البث (Top 3)</a></li>
             </ul>
         </div>
         <div class="user-info">
             <img src="https://cdn.discordapp.com/avatars/{{ user.id }}/{{ user.avatar }}.png" alt="Avatar">
             <div>
-                <p style="font-weight: bold; font-size: 14px;">{{ user.username }}</p>
-                <a href="/logout" style="color: #f38ba8; font-size: 12px; text-decoration: none;">تسجيل الخروج</a>
+                <p style="font-weight: 700; font-size: 14px;">{{ user.username }}</p>
+                <a href="/logout" style="color: #FE2C55; font-size: 12px; text-decoration: none; font-weight: 600;">تسجيل الخروج</a>
             </div>
         </div>
     </div>
@@ -136,7 +147,7 @@ DASHBOARD_HTML = """
     <div class="main-content">
         <!-- تبويب الإعدادات -->
         <div id="settings" class="tab-content active">
-            <h1 style="margin-bottom: 20px;">⚙️ إعدادات البوت والربط</h1>
+            <h1 style="margin-bottom: 25px; font-weight: 800; font-size: 26px;">⚙️ إعدادات البوت والربط</h1>
             <div class="card">
                 <form action="/save-settings" method="POST">
                     <div class="form-group">
@@ -148,47 +159,50 @@ DASHBOARD_HTML = """
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>معرف القناة (Channel ID):</label>
+                        <label>معرف قناة الديسكورد (Channel ID):</label>
                         <input type="text" name="channel_id" value="{{ config.channel_id or '' }}" placeholder="123456789012345678" required>
                     </div>
                     <div class="form-group">
-                        <label>عنوان رسالة أفضل المتفاعلين:</label>
+                        <label>عنوان رسالة التفاعل:</label>
                         <input type="text" name="top_title" value="{{ config.top_title }}" required>
                     </div>
-                    <button type="submit" class="btn"><i class="fa-solid fa-floppy-disk"></i> حفظ الإعدادات</button>
+                    <button type="submit" class="btn-tiktok"><i class="fa-solid fa-check"></i> حفظ الإعدادات</button>
                 </form>
             </div>
         </div>
 
         <!-- تبويب أفضل 3 متفاعلين -->
         <div id="top3" class="tab-content">
-            <h1 style="margin-bottom: 20px;">🏆 المتفاعلين في البث الحالي</h1>
+            <h1 style="margin-bottom: 25px; font-weight: 800; font-size: 26px;">🔥 أفضل المتفاعلين في البث</h1>
             <div class="card">
-                <p style="color: #a6adc8;">يتم تحديث القائمة تلقائياً بناءً على تعليقات البث مباشر.</p>
+                <p style="color: #888888; margin-bottom: 15px;">يتم فرز أكثر الأشخاص كتابة للتعليقات تلقائياً من البث المباشر.</p>
                 <ul class="leaderboard-list">
                     {% if top_users %}
                         {% for user, count in top_users %}
                             <li class="leaderboard-item">
-                                <span><strong>#{{ loop.index }}</strong> {{ user }}</span>
+                                <span style="font-size: 16px;"><strong>#{{ loop.index }}</strong> {{ user }}</span>
                                 <span class="badge">{{ count }} تعليق</span>
                             </li>
                         {% endfor %}
                     {% else %}
-                        <li class="leaderboard-item" style="justify-content: center; color: #a6adc8;">لا يوجد تفاعل مسجل بعد في البث الحالي</li>
+                        <li class="leaderboard-item" style="justify-content: center; color: #777777;">لا يوجد متفاعلين حالياً في البث</li>
                     {% endif %}
                 </ul>
                 <br>
-                <a href="/trigger-top" class="btn" style="background-color: #a6e3a1; color: #11111b;"><i class="fa-solid fa-paper-plane"></i> إرسال القائمة لإشعار الديسكورد الآن</a>
+                <a href="/trigger-top" class="btn-cyan"><i class="fa-solid fa-paper-plane"></i> إرسال القائمة للديسكورد الآن</a>
             </div>
         </div>
     </div>
     {% else %}
     <!-- صفحة تسجيل الدخول -->
     <div style="margin: auto; text-align: center;">
-        <div class="card" style="width: 350px;">
-            <h2 style="margin-bottom: 15px;">تسجيل الدخول</h2>
-            <p style="color: #a6adc8; margin-bottom: 20px;">قم بالتسجيل بواسطة الديسكورد للوصول لإعدادات البث</p>
-            <a href="/login" class="btn" style="background-color: #5865F2; color: white;"><i class="fa-brands fa-discord"></i> دخول بحساب Discord</a>
+        <div class="card" style="width: 380px;">
+            <div class="brand" style="margin-bottom: 20px;">
+                <i class="fa-brands fa-tiktok" style="font-size: 32px;"></i>
+                <span style="font-size: 26px;">TikTok Bot</span>
+            </div>
+            <p style="color: #888888; margin-bottom: 25px;">سجل الدخول بواسطة ديسكورد للتحكم باللوحة والإشعارات</p>
+            <a href="/login" class="btn-tiktok" style="justify-content: center; width: 100%;"><i class="fa-brands fa-discord"></i> دخول بحساب Discord</a>
         </div>
     </div>
     {% endif %}
@@ -257,7 +271,7 @@ def callback():
     user_data = requests.get(f"{API_BASE_URL}/users/@me", headers=user_headers).json()
     all_guilds = requests.get(f"{API_BASE_URL}/users/@me/guilds", headers=user_headers).json()
 
-    # تصفية السيرفرات بحسب الصلاحيات لتجنب كبر حجم الـ Cookie
+    # تصفية السيرفرات لمنع مشكلة حجم الكوكي
     filtered_guilds = []
     if isinstance(all_guilds, list):
         for g in all_guilds:
@@ -305,9 +319,6 @@ def run_flask():
     app.run(host='0.0.0.0', port=port)
 
 if __name__ == '__main__':
-    # 1. تشغيل لوحة التحكم في مسار مستقل (Thread)
     threading.Thread(target=run_flask, daemon=True).start()
-    
-    # 2. تشغيل بوت ديسكورد
     if BOT_TOKEN:
         bot.run(BOT_TOKEN)
