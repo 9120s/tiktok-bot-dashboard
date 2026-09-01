@@ -1,109 +1,111 @@
 import os
-import sqlite3
-import asyncio
-import threading
-from flask import Flask, render_template, request, redirect, url_for, session
-import discord
-from discord.ext import commands
+import requests
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from flask_sqlalchemy import SQLAlchemy
 
-# --- 1. إعداد قاعدة البيانات SQLite ---
-def init_db():
-    conn = sqlite3.connect('bot_data.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS subscriptions (
-            guild_id TEXT,
-            channel_id TEXT,
-            tiktok_username TEXT,
-            PRIMARY KEY (guild_id, tiktok_username)
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
-init_db()
-
-# --- 2. إعداد تطبيق Flask (لوحة التحكم) ---
 app = Flask(__name__)
-app.secret_key = 'super_secret_key_change_this'  # مفتاح جلسة Flask
+app.secret_key = os.environ.get('SECRET_KEY', 'super-secret-key-2s2')
+
+# إعدادات قاعدة البيانات
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+
+# إعدادات Discord OAuth2 (تأكد من إضافتها في Environment Variables على Render لاحقاً)
+CLIENT_ID = os.environ.get('DISCORD_CLIENT_ID', '')
+CLIENT_SECRET = os.environ.get('DISCORD_CLIENT_SECRET', '')
+REDIRECT_URI = os.environ.get('DISCORD_REDIRECT_URI', 'https://tiktok-bot-2s2-dashboard.onrender.com/callback')
+API_BASE_URL = 'https://discord.com/api/v10'
+
+class Alert(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    guild_id = db.Column(db.String(100), nullable=False)
+    channel_id = db.Column(db.String(100), nullable=False)
+    tiktok_username = db.Column(db.String(100), nullable=False)
+
+with app.app_context():
+    db.create_all()
+
+# تصفية السيرفرات بناءً على صلاحيات الإدارة لرتبتك (Administrator: 0x8 أو Manage Server: 0x20)
+def filter_manageable_guilds(guilds):
+    manageable = []
+    for g in guilds:
+        perms = int(g.get('permissions', 0))
+        if (perms & 0x8) == 0x8 or (perms & 0x20) == 0x20:
+            manageable.append(g)
+    return manageable
 
 @app.route('/')
 def index():
-    # استرجاع التنبيهات من قاعدة البيانات
-    conn = sqlite3.connect('bot_data.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT guild_id, channel_id, tiktok_username FROM subscriptions')
-    subscriptions = cursor.fetchall()
-    conn.close()
+    user = session.get('user')
+    guilds = session.get('user_guilds', [])
+    filtered_guilds = filter_manageable_guilds(guilds) if guilds else []
+    alerts = Alert.query.all()
+    return render_template('index.html', user=user, guilds=filtered_guilds, alerts=alerts)
 
-    # قائمة السيرفرات المتصلة بالبوت (أمثلة تجريبية للواجهة)
-    guilds = [
-        {'id': '123456789012345678', 'name': 'سيرفر مجتمع التيك توك'},
-        {'id': '987654321098765432', 'name': 'سيرفر البثوث والمباشر'}
-    ]
+# مسار بدء الدخول عبر الديسكورد
+@app.route('/login')
+def login():
+    discord_login_url = f"https://discord.com/api/oauth2/authorize?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code&scope=identify%20guilds"
+    return redirect(discord_login_url)
 
-    return render_template('index.html', subscriptions=subscriptions, guilds=guilds)
+# استقبال استجابة الديسكورد وجلب سيرفرات رتبتك
+@app.route('/callback')
+def callback():
+    code = request.args.get('code')
+    if not code:
+        return redirect(url_for('index'))
+    
+    data = {
+        'client_id': CLIENT_ID,
+        'client_secret': CLIENT_SECRET,
+        'grant_type': 'authorization_code',
+        'code': code,
+        'redirect_uri': REDIRECT_URI,
+        'scope': 'identify guilds'
+    }
+    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+    r = requests.post(f'{API_BASE_URL}/oauth2/token', data=data, headers=headers)
+    tokens = r.json()
+    access_token = tokens.get('access_token')
 
-@app.route('/add', methods=['POST'])
-def add_subscription():
-    guild_id = request.form.get('guild_id')
-    channel_id = request.form.get('channel_id')
-    tiktok_username = request.form.get('tiktok_username', '').strip().replace('@', '')
-
-    if guild_id and channel_id and tiktok_username:
-        conn = sqlite3.connect('bot_data.db')
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT OR REPLACE INTO subscriptions (guild_id, channel_id, tiktok_username)
-            VALUES (?, ?, ?)
-        ''', (guild_id, channel_id, tiktok_username))
-        conn.commit()
-        conn.close()
-
-    return redirect(url_for('index'))
-
-@app.route('/delete/<guild_id>/<tiktok_username>', methods=['POST'])
-def delete_subscription(guild_id, tiktok_username):
-    conn = sqlite3.connect('bot_data.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        DELETE FROM subscriptions WHERE guild_id = ? AND tiktok_username = ?
-    ''', (guild_id, tiktok_username))
-    conn.commit()
-    conn.close()
+    if access_token:
+        headers_auth = {'Authorization': f'Bearer {access_token}'}
+        user_req = requests.get(f'{API_BASE_URL}/users/@me', headers=headers_auth)
+        guilds_req = requests.get(f'{API_BASE_URL}/users/@me/guilds', headers=headers_auth)
+        
+        session['user'] = user_req.json()
+        session['user_guilds'] = guilds_req.json()
 
     return redirect(url_for('index'))
 
+# تسجيل الخروج الفعلي (مسح الجلسة)
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect(url_for('index'))
 
-def run_flask():
-    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
+@app.route('/add_alert', methods=['POST'])
+def add_alert():
+    guild_id = request.form.get('guild_id')
+    channel_id = request.form.get('channel_id')
+    tiktok_username = request.form.get('tiktok_username')
 
-# --- 3. إعداد بوت الديسكورد (discord.py) ---
-intents = discord.Intents.default()
-intents.message_content = True
-bot = commands.Bot(command_prefix='!', intents=intents)
+    if guild_id and channel_id and tiktok_username:
+        new_alert = Alert(guild_id=guild_id, channel_id=channel_id, tiktok_username=tiktok_username.strip())
+        db.session.add(new_alert)
+        db.session.commit()
 
-@bot.event
-async def on_ready():
-    print(f'✅ تم تسجيل الدخول بنجاح باسم البوت: {bot.user}')
+    return redirect(url_for('index'))
 
-# --- 4. تشغيل سيرفر الويب والبوت معاً ---
+@app.route('/delete_alert/<int:id>', methods=['POST'])
+def delete_alert(id):
+    alert = Alert.query.get(id)
+    if alert:
+        db.session.delete(alert)
+        db.session.commit()
+    return redirect(url_for('index'))
+
 if __name__ == '__main__':
-    # تشغيل Flask في مسار فرعي (Thread)
-    flask_thread = threading.Thread(target=run_flask)
-    flask_thread.daemon = True
-    flask_thread.start()
-
-    # وضع توكن البوت الخاص بك هنا
-    TOKEN = 'YOUR_DISCORD_BOT_TOKEN_HERE'
-
-    if TOKEN != 'YOUR_DISCORD_BOT_TOKEN_HERE':
-        bot.run(TOKEN)
-    else:
-        print("⚠️ يرجى إضافة توكن البوت الخارجي في المتغير TOKEN داخل ملف main_bot.py")
-        # إبقاء السيرفر يعمل حتى لو لم يتوفر التوكن فوراً
-        flask_thread.join()
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
