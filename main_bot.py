@@ -1,115 +1,169 @@
 import os
 import requests
-from flask import Flask, render_template, request, redirect, url_for, session, make_response
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, redirect, url_for, session, request, render_template_string
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'super-secret-key-2s2')
 
-# إعداد قاعدة البيانات
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
+# إعدادات المفاتيح المتغيرة
+app.secret_key = os.environ.get("SECRET_KEY", "fallback-secret-key-12345")
+CLIENT_ID = os.environ.get("DISCORD_CLIENT_ID")
+CLIENT_SECRET = os.environ.get("DISCORD_CLIENT_SECRET")
+REDIRECT_URI = os.environ.get("DISCORD_REDIRECT_URI")
 
-# إعدادات Discord OAuth2
-CLIENT_ID = os.environ.get('DISCORD_CLIENT_ID', '')
-CLIENT_SECRET = os.environ.get('DISCORD_CLIENT_SECRET', '')
-REDIRECT_URI = os.environ.get('DISCORD_REDIRECT_URI', 'https://tiktok-bot-2s2-dashboard.onrender.com/callback')
-API_BASE_URL = 'https://discord.com/api/v10'
+API_BASE_URL = "https://discord.com/api/v10"
 
-class Alert(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    guild_id = db.Column(db.String(100), nullable=False)
-    channel_id = db.Column(db.String(100), nullable=False)
-    tiktok_username = db.Column(db.String(100), nullable=False)
-
-with app.app_context():
-    db.create_all()
-
-# دالة لتصفية السيرفرات بناءً على صلاحيات الإدارة للمستخدم (Administrator: 0x8 أو Manage Server: 0x20)
-def filter_manageable_guilds(guilds):
-    manageable = []
-    if not guilds or not isinstance(guilds, list):
-        return manageable
-    for g in guilds:
-        perms = int(g.get('permissions', 0))
-        if (perms & 0x8) == 0x8 or (perms & 0x20) == 0x20:
-            manageable.append(g)
-    return manageable
+# قالب الصفحة الرئيسية وتصميم إعدادات التفاعل في البث
+INDEX_HTML = """
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>لوحة تحكم البوت</title>
+    <style>
+        body { font-family: sans-serif; background-color: #1e1e2e; color: #cdd6f4; text-align: center; padding: 40px; }
+        .card { background: #313244; padding: 25px; border-radius: 12px; max-width: 500px; margin: 0 auto; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+        .btn { background-color: #5865F2; color: white; padding: 12px 24px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; text-decoration: none; display: inline-block; margin-top: 15px; }
+        .btn:hover { background-color: #4752C4; }
+        .form-group { margin-bottom: 15px; text-align: right; }
+        label { display: block; margin-bottom: 5px; font-size: 14px; color: #a6adc8; }
+        input[type="text"], select { width: 100%; padding: 10px; border-radius: 6px; border: 1px solid #45475a; background: #1e1e2e; color: #cdd6f4; box-sizing: border-box; }
+        .user-badge { margin-bottom: 20px; }
+        .user-badge img { border-radius: 50%; width: 80px; height: 80px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        {% if user %}
+            <div class="user-badge">
+                <img src="https://cdn.discordapp.com/avatars/{{ user.id }}/{{ user.avatar }}.png" alt="Avatar">
+                <h2>أهلاً بك، {{ user.username }}</h2>
+            </div>
+            
+            <form action="/save-settings" method="POST">
+                <h3>إعدادات إشعار أفضل 3 متفاعلين</h3>
+                <div class="form-group">
+                    <label>اختر السيرفر:</label>
+                    <select name="guild_id">
+                        {% for guild in guilds %}
+                            <option value="{{ guild.id }}">{{ guild.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>عنوان الإشعار (مثال: 🏆 أفضل 3 متفاعلين في البث):</label>
+                    <input type="text" name="top_title" value="🏆 أفضل 3 متفاعلين في البث" required>
+                </div>
+                
+                <div class="form-group">
+                    <label>معرّف قناة الإشعارات (Channel ID):</label>
+                    <input type="text" name="channel_id" placeholder="أدخل ID القناة" required>
+                </div>
+                
+                <button type="submit" class="btn">حفظ الإعدادات</button>
+            </form>
+            <br>
+            <a href="/logout" style="color: #f38ba8; text-decoration: none; font-size: 14px;">تسجيل الخروج</a>
+        {% else %}
+            <h2>لوحة تحكم بوت تيك توك</h2>
+            <p>يرجى تسجيل الدخول للتحكم بإعدادات الإشعارات والتفاعل</p>
+            <a href="/login" class="btn">تسجيل الدخول بالديسكورد</a>
+        {% endif %}
+    </div>
+</body>
+</html>
+"""
 
 @app.route('/')
 def index():
     user = session.get('user')
-    guilds = session.get('user_guilds', [])
-    filtered_guilds = filter_manageable_guilds(guilds)
-    alerts = Alert.query.all()
-    return render_template('index.html', user=user, guilds=filtered_guilds, alerts=alerts)
+    guilds = session.get('guilds', [])
+    return render_template_string(INDEX_HTML, user=user, guilds=guilds)
 
-# مسار تسجيل الدخول عبر ديسكورد
 @app.route('/login')
 def login():
-    discord_login_url = f"https://discord.com/api/oauth2/authorize?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code&scope=identify%20guilds"
-    return redirect(discord_login_url)
+    scope = "identify guilds"
+    discord_auth_url = (
+        f"{API_BASE_URL}/oauth2/authorize"
+        f"?client_id={CLIENT_ID}"
+        f"&redirect_uri={REDIRECT_URI}"
+        f"&response_type=code"
+        f"&scope={scope}"
+    )
+    return redirect(discord_auth_url)
 
-# استقبال استجابة ديسكورد وجلب البيانات
 @app.route('/callback')
 def callback():
     code = request.args.get('code')
     if not code:
-        return redirect(url_for('index'))
-    
+        return redirect('/')
+
+    # 1. تبادل Code بـ Access Token
     data = {
         'client_id': CLIENT_ID,
         'client_secret': CLIENT_SECRET,
         'grant_type': 'authorization_code',
         'code': code,
-        'redirect_uri': REDIRECT_URI,
-        'scope': 'identify guilds'
+        'redirect_uri': REDIRECT_URI
     }
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-    r = requests.post(f'{API_BASE_URL}/oauth2/token', data=data, headers=headers)
-    tokens = r.json()
-    access_token = tokens.get('access_token')
+    token_res = requests.post(f"{API_BASE_URL}/oauth2/token", data=data, headers=headers)
+    token_json = token_res.json()
+    access_token = token_json.get('access_token')
 
-    if access_token:
-        headers_auth = {'Authorization': f'Bearer {access_token}'}
-        user_req = requests.get(f'{API_BASE_URL}/users/@me', headers=headers_auth)
-        guilds_req = requests.get(f'{API_BASE_URL}/users/@me/guilds', headers=headers_auth)
-        
-        session['user'] = user_req.json()
-        session['user_guilds'] = guilds_req.json()
+    if not access_token:
+        return redirect('/')
 
-    return redirect(url_for('index'))
+    # 2. جلب بيانات المستخدم
+    user_headers = {'Authorization': f"Bearer {access_token}"}
+    user_res = requests.get(f"{API_BASE_URL}/users/@me", headers=user_headers)
+    user_data = user_res.json()
 
-# مسار تسجيل الخروج الفعلي ومسح الجلسة والكوكيز
+    # 3. جلب السيرفرات وتصفيتها لحل مشكلة حجم الـ Session (Cookie Size Limit)
+    guilds_res = requests.get(f"{API_BASE_URL}/users/@me/guilds", headers=user_headers)
+    all_guilds = guilds_res.json()
+
+    filtered_guilds = []
+    if isinstance(all_guilds, list):
+        for g in all_guilds:
+            permissions = int(g.get('permissions', 0))
+            # الحفظ فقط للسيرفرات التي يملك فيها صلاحية Administrator (0x8) أو المالك
+            if (permissions & 0x8) == 0x8 or g.get('owner', False):
+                filtered_guilds.append({
+                    'id': g['id'],
+                    'name': g['name'],
+                    'icon': g.get('icon')
+                })
+
+    # حفظ البيانات المصغرة في Session
+    session['user'] = {
+        'id': user_data.get('id'),
+        'username': user_data.get('username'),
+        'avatar': user_data.get('avatar')
+    }
+    session['guilds'] = filtered_guilds
+
+    return redirect('/')
+
+@app.route('/save-settings', methods=['POST'])
+def save_settings():
+    if 'user' not in session:
+        return redirect('/login')
+
+    guild_id = request.form.get('guild_id')
+    top_title = request.form.get('top_title')
+    channel_id = request.form.get('channel_id')
+
+    # هنا يتم حفظ الإعدادات أو إرسالها للبوت الخاص بك
+    print(f"[حفظ الإعدادات] السيرفر: {guild_id} | القناة: {channel_id} | عنوان التفاعل: {top_title}")
+
+    return redirect('/')
+
 @app.route('/logout')
 def logout():
     session.clear()
-    resp = make_response(redirect(url_for('index')))
-    resp.set_cookie('session', '', expires=0)
-    return resp
-
-@app.route('/add_alert', methods=['POST'])
-def add_alert():
-    guild_id = request.form.get('guild_id')
-    channel_id = request.form.get('channel_id')
-    tiktok_username = request.form.get('tiktok_username')
-
-    if guild_id and channel_id and tiktok_username:
-        new_alert = Alert(guild_id=guild_id, channel_id=channel_id, tiktok_username=tiktok_username.strip())
-        db.session.add(new_alert)
-        db.session.commit()
-
-    return redirect(url_for('index'))
-
-@app.route('/delete_alert/<int:id>', methods=['POST'])
-def delete_alert(id):
-    alert = Alert.query.get(id)
-    if alert:
-        db.session.delete(alert)
-        db.session.commit()
-    return redirect(url_for('index'))
+    return redirect('/')
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
