@@ -1,5 +1,6 @@
 import os
 import threading
+import time
 import requests
 from flask import Flask, redirect, session, request, render_template_string
 import discord
@@ -68,7 +69,7 @@ async def send_top_active_users(guild_id):
     return True
 
 # -------------------------------------------------------------------
-# 3. تصميم اللوحة بثيم تيك توك وتدعم التعدد
+# 3. تصميم اللوحة بثيم تيك توك وتدعم التعدد والحفظ المباشر
 # -------------------------------------------------------------------
 DASHBOARD_HTML = """
 <!DOCTYPE html>
@@ -206,7 +207,6 @@ DASHBOARD_HTML = """
                         <label>اختر السيرفر المراد تعديله:</label>
                         <div class="select-wrapper">
                             <select name="guild_id" onchange="window.location.href='/?guild_id=' + this.value">
-                                <option value="" disabled {% if not selected_guild_id %}selected{% endif %}>-- اختر سيرفر --</option>
                                 {% for guild in guilds %}
                                     <option value="{{ guild.id }}" {% if selected_guild_id == guild.id %}selected{% endif %}>
                                         {{ guild.name }}
@@ -364,12 +364,17 @@ def save_settings():
         return redirect('/login')
 
     guild_id = request.form.get('guild_id')
+    if not guild_id and session.get('guilds'):
+        guild_id = session['guilds'][0]['id']
+
     if guild_id:
         GUILDS_CONFIG[str(guild_id)] = {
             "channel_id": request.form.get('channel_id'),
             "top_title": request.form.get('top_title')
         }
-    return redirect(f'/?guild_id={guild_id}')
+        return redirect(f'/?guild_id={guild_id}')
+        
+    return redirect('/')
 
 @app.route('/trigger-top')
 def trigger_top():
@@ -384,7 +389,22 @@ def logout():
     return redirect('/')
 
 # -------------------------------------------------------------------
-# 5. تشغيل الخدمات بالتوازي
+# 5. دالة منع النوم والتغذية الذاتية (Keep-Alive)
+# -------------------------------------------------------------------
+def keep_alive():
+    url = os.environ.get("RENDER_EXTERNAL_URL")
+    if not url:
+        return
+    while True:
+        time.sleep(600)  # إرسال طلب كل 10 دقائق
+        try:
+            requests.get(url)
+            print("[Keep-Alive] Ping sent successfully.")
+        except Exception as e:
+            print(f"[Keep-Alive Error] {e}")
+
+# -------------------------------------------------------------------
+# 6. تشغيل الخدمات بالتوازي
 # -------------------------------------------------------------------
 def run_discord_bot():
     if BOT_TOKEN:
@@ -395,5 +415,6 @@ def run_discord_bot():
 
 if __name__ == '__main__':
     threading.Thread(target=run_discord_bot, daemon=True).start()
+    threading.Thread(target=keep_alive, daemon=True).start()
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
