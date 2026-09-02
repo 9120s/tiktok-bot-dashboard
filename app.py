@@ -2,16 +2,13 @@ import os
 import requests
 import threading
 from flask import Flask, render_template, request, jsonify, redirect
-from database import save_guild_config, get_all_configs
 
 app = Flask(__name__)
 
-# بيانات تطبيق ديسكورد
 DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID", "1544289467853045861")
-DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "") # يمكنك إضافته في Render Environment Variables
-REDIRECT_URI = "https://tiktok-bot-2s2-dashboard.onrender.com/callback"
+DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
+REDIRECT_URI = os.getenv("REDIRECT_URI", "https://tiktok-bot-2s2-dashboard.onrender.com/callback")
 
-# تشغيل البوت في مسار منفصل
 def run_discord_bot():
     from main_bot import bot
     bot_token = os.getenv("DISCORD_BOT_TOKEN") or os.getenv("BOT_TOKEN")
@@ -29,60 +26,66 @@ def login():
     discord_auth_url = f"https://discord.com/oauth2/authorize?client_id={DISCORD_CLIENT_ID}&response_type=code&redirect_uri={REDIRECT_URI}&scope=identify+guilds"
     return redirect(discord_auth_url)
 
-# مسار استقبال الرمز من ديسكورد بعد الموافقة
 @app.route('/callback')
 def callback():
     code = request.args.get('code')
     if not code:
         return redirect('/')
     
-    # توجيه المستخدم إلى اللوحة مع إبقاء الرمز
-    return redirect(f'/?token={code}')
+    data = {
+        'client_id': DISCORD_CLIENT_ID,
+        'client_secret': DISCORD_CLIENT_SECRET,
+        'grant_type': 'authorization_code',
+        'code': code,
+        'redirect_uri': REDIRECT_URI
+    }
+    headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+    r = requests.post('https://discord.com/api/v10/oauth2/token', data=data, headers=headers)
+    
+    if r.status_code == 200:
+        token = r.json().get('access_token')
+        return redirect(f'/?token={token}')
+    
+    return redirect('/')
 
 @app.route('/api/guilds', methods=['GET'])
 def get_guilds():
-    token = request.args.get('token')
-    if not token:
-        return jsonify({"guilds": []})
-    
-    configs = get_all_configs()
+    user_token = request.args.get('token')
     guilds_list = []
-    for g_id in configs.keys():
-        guilds_list.append({"id": g_id, "name": f"Server {g_id}"})
-        
+
+    # 1. جلب كافة سيرفرات المستخدم التي يملك فيها رتبة أو صلاحيات إدارية
+    if user_token and user_token != 'demo':
+        headers = {'Authorization': f'Bearer {user_token}'}
+        res = requests.get('https://discord.com/api/v10/users/@me/guilds', headers=headers)
+        if res.status_code == 200:
+            for g in res.json():
+                permissions = int(g.get('permissions', 0))
+                
+                # فحص شامل لكافة الصلاحيات الإدارية في الديسكورد:
+                # Owner | Administrator (0x8) | Manage Server (0x20) | Manage Roles (0x10000000) | Manage Channels (0x10) | Manage Webhooks (0x20000000) | Manage Messages (0x2000)
+                has_permission = (
+                    g.get('owner') or 
+                    (permissions & 0x8) != 0 or 
+                    (permissions & 0x20) != 0 or 
+                    (permissions & 0x10000000) != 0 or 
+                    (permissions & 0x10) != 0 or 
+                    (permissions & 0x20000000) != 0 or
+                    (permissions & 0x2000) != 0
+                )
+                
+                if has_permission:
+                    guilds_list.append({"id": str(g['id']), "name": g['name']})
+
+    # 2. في حال لم يُرجع حسابك أي سيرفر أو لم يتم تسجيل الدخول، يتم عرض سيرفرات البوت بأسمائها الحقيقية
+    if not guilds_list:
+        try:
+            from main_bot import bot
+            if bot.is_ready():
+                guilds_list = [{"id": str(g.id), "name": g.name} for g in bot.guilds]
+        except Exception as e:
+            print("Error fetching bot guilds:", e)
+
     return jsonify({"guilds": guilds_list})
 
-@app.route('/api/config', methods=['GET'])
-def get_config():
-    token = request.args.get('token')
-    if not token:
-        return jsonify({"error": "Unauthorized"}), 401
-        
-    configs = get_all_configs()
-    if configs:
-        last_key = list(configs.keys())[-1]
-        return jsonify(configs[last_key])
-    return jsonify({})
-
-@app.route('/api/config', methods=['POST'])
-def save_config():
-    token = request.args.get('token')
-    if not token:
-        return jsonify({"error": "Unauthorized"}), 401
-        
-    data = request.json or {}
-    guild_id = data.get('guild_id')
-    tiktok_username = data.get('tiktok_username')
-    channel_id = data.get('channel_id')
-    message_title = data.get('message_title')
-
-    if not all([guild_id, tiktok_username, channel_id, message_title]):
-        return jsonify({"error": "جميع الحقول مطلوبة"}), 400
-
-    success = save_guild_config(guild_id, tiktok_username, channel_id, message_title)
-    if success:
-        return jsonify({"message": "Saved successfully"})
-    return jsonify({"error": "Failed to save data"}), 500
-
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
