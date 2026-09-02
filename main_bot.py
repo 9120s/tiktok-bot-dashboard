@@ -11,7 +11,7 @@ from waitress import serve
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 # --------------------------------------------------
-# 1. الإعدادات وإدارة الحفظ
+# 1. الإعدادات وقاعدة البيانات السحابية
 # --------------------------------------------------
 
 app = Flask(__name__)
@@ -22,26 +22,66 @@ CLIENT_ID = os.environ.get("CLIENT_ID") or os.environ.get("DISCORD_CLIENT_ID", "
 CLIENT_SECRET = os.environ.get("CLIENT_SECRET") or os.environ.get("DISCORD_CLIENT_SECRET", "")
 REDIRECT_URI = os.environ.get("REDIRECT_URI") or os.environ.get("DISCORD_REDIRECT_URI", "")
 BOT_TOKEN = os.environ.get("BOT_TOKEN") or os.environ.get("DISCORD_BOT_TOKEN", "")
+JSONBIN_KEY = os.environ.get("JSONBIN_KEY", "")
 
 DISCORD_SERVER_INVITE = "https://discord.gg/TQUFzyxM7"
 API_BASE_URL = "https://discord.com/api/v10"
-CONFIG_FILE = "guilds_config.json"
+BIN_ID_FILE = "bin_id.txt"
+
+def get_bin_id():
+    if os.path.exists(BIN_ID_FILE):
+        with open(BIN_ID_FILE, "r") as f:
+            return f.read().strip()
+    return None
+
+def set_bin_id(bin_id):
+    with open(BIN_ID_FILE, "w") as f:
+        f.write(bin_id)
 
 def load_configs():
-    if os.path.exists(CONFIG_FILE):
+    if not JSONBIN_KEY:
+        print("[DB Warning] JSONBIN_KEY is not set.")
+        return {}
+    
+    bin_id = get_bin_id()
+    headers = {"X-Master-Key": JSONBIN_KEY}
+
+    if bin_id:
         try:
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
+            res = requests.get(f"https://api.jsonbin.io/v3/b/{bin_id}/latest", headers=headers)
+            if res.status_code == 200:
+                return res.json().get("record", {})
+        except Exception as e:
+            print(f"[DB Load Error] {e}")
+
+    try:
+        headers["Content-Type"] = "application/json"
+        headers["X-Bin-Private"] = "true"
+        res = requests.post("https://api.jsonbin.io/v3/b", headers=headers, json={})
+        if res.status_code == 200:
+            new_id = res.json()["metadata"]["id"]
+            set_bin_id(new_id)
             return {}
+    except Exception as e:
+        print(f"[DB Init Error] {e}")
+
     return {}
 
 def save_configs():
+    if not JSONBIN_KEY:
+        return
+    bin_id = get_bin_id()
+    if not bin_id:
+        return
+
+    headers = {
+        "Content-Type": "application/json",
+        "X-Master-Key": JSONBIN_KEY
+    }
     try:
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(GUILDS_CONFIG, f, ensure_ascii=False, indent=4)
+        requests.put(f"https://api.jsonbin.io/v3/b/{bin_id}", headers=headers, json=GUILDS_CONFIG)
     except Exception as e:
-        print(f"[Config Save Error] {e}")
+        print(f"[DB Save Error] {e}")
 
 GUILDS_CONFIG = load_configs()
 
@@ -75,8 +115,6 @@ async def on_ready():
 def run_bot():
     if BOT_TOKEN:
         bot.run(BOT_TOKEN)
-    else:
-        print("Error: BOT_TOKEN is missing!")
 
 # --------------------------------------------------
 # 3. واجهة لوحة التحكم
@@ -120,10 +158,7 @@ DASHBOARD_HTML = """
             color: var(--text-color);
             font-size: 24px;
             cursor: pointer;
-            transition: color 0.3s;
         }
-
-        .menu-btn:hover { color: var(--accent-color); }
 
         .brand { font-size: 20px; font-weight: bold; display: flex; align-items: center; gap: 10px; }
         .brand i { color: var(--accent-color); }
@@ -155,7 +190,6 @@ DASHBOARD_HTML = """
         }
 
         .close-btn { background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; }
-        .close-btn:hover { color: var(--text-color); }
 
         .nav-links { list-style: none; display: flex; flex-direction: column; gap: 10px; height: 100%; }
         .nav-links li a {
@@ -166,7 +200,6 @@ DASHBOARD_HTML = """
             color: var(--text-muted);
             text-decoration: none;
             border-radius: 8px;
-            transition: all 0.3s;
         }
 
         .nav-links li a:hover, .nav-links li a.active {
@@ -190,11 +223,6 @@ DASHBOARD_HTML = """
             font-weight: bold;
         }
 
-        .discord-btn-link:hover {
-            background-color: var(--discord-color) !important;
-            color: white !important;
-        }
-
         .overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -211,7 +239,6 @@ DASHBOARD_HTML = """
             border-radius: 12px;
             padding: 30px;
             margin-bottom: 20px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
         }
 
         .form-group { margin-bottom: 20px; text-align: right; }
@@ -226,7 +253,6 @@ DASHBOARD_HTML = """
             font-size: 14px;
             outline: none;
         }
-        .form-control:focus { border-color: var(--accent-color); }
 
         .btn-submit {
             width: 100%;
@@ -238,9 +264,7 @@ DASHBOARD_HTML = """
             font-weight: bold;
             font-size: 16px;
             cursor: pointer;
-            transition: background 0.3s;
         }
-        .btn-submit:hover { opacity: 0.9; }
 
         .btn-login {
             display: inline-flex;
@@ -316,7 +340,7 @@ DASHBOARD_HTML = """
                 <div class="card">
                     <h2 style="margin-bottom: 20px;"><i class="fa-solid fa-bell" style="color: var(--accent-color);"></i> إعدادات التنبيهات</h2>
                     
-                    <div id="save-msg" class="alert-success">تم حفظ الإعدادات بنجاح! ✅</div>
+                    <div id="save-msg" class="alert-success">تم حفظ الإعدادات بنجاح بشكل دائم! ✅</div>
 
                     <form id="settings-form" onsubmit="saveSettings(event)">
                         <div class="form-group">
@@ -346,7 +370,6 @@ DASHBOARD_HTML = """
             <div id="top3" class="tab-content">
                 <div class="card">
                     <h2 style="margin-bottom: 20px;"><i class="fa-solid fa-trophy" style="color: gold;"></i> قائمة أفضل ثوالث</h2>
-                    <p style="color: var(--text-muted); margin-bottom: 15px;">عرض إحصائيات ومعلومات الداعمين وأفضل المجموعات.</p>
                     <div style="padding: 20px; background: #101117; border-radius: 8px; text-align: center; color: var(--text-muted);">
                         قريباً: سيتم مزامنة أفضل ثوالث وتحديثها تلقائياً مع بث التيك توك.
                     </div>
@@ -382,7 +405,6 @@ DASHBOARD_HTML = """
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
             document.querySelectorAll('.nav-links a').forEach(link => link.classList.remove('active'));
-            
             document.getElementById(tabId).classList.add('active');
             event.currentTarget.classList.add('active');
             toggleMenu();
@@ -413,7 +435,9 @@ DASHBOARD_HTML = """
             if (res.ok) {
                 const msg = document.getElementById('save-msg');
                 msg.style.display = 'block';
-                setTimeout(() => { msg.style.display = 'none'; }, 3000);
+                setTimeout(() => {
+                    window.location.href = '/?token=' + currentToken + '&guild_id=' + guildId;
+                }, 1000);
             }
         }
     </script>
