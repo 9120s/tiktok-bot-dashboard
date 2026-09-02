@@ -2,19 +2,27 @@ import os
 import requests
 from flask import Flask, render_template, request, jsonify, redirect
 
-app = Flask(__name__, template_folder='templates')
+# تحديد المسار النهائي للمجلد لتجنب مشكلة الشاشة البيضاء
+base_dir = os.path.abspath(os.path.dirname(__file__))
+template_dir = os.path.join(base_dir, 'templates')
+
+app = Flask(__name__, template_folder=template_dir)
 
 DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID", "1544289467853045861")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
-REDIRECT_URI = os.getenv("REDIRECT_URI", "https://tiktok-bot-2s2-dashboard.onrender.com/callback")
+REDIRECT_URI = os.getenv("REDIRECT_URI", "")
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    try:
+        return render_template('index.html')
+    except Exception as e:
+        return f"<h3>حدث خطأ في تحميل الصفحة:</h3><p>{str(e)}</p>", 500
 
 @app.route('/login')
 def login():
-    discord_auth_url = f"https://discord.com/oauth2/authorize?client_id={DISCORD_CLIENT_ID}&response_type=code&redirect_uri={REDIRECT_URI}&scope=identify+guilds"
+    redirect_url = REDIRECT_URI if REDIRECT_URI else f"{request.host_url.rstrip('/')}/callback"
+    discord_auth_url = f"https://discord.com/oauth2/authorize?client_id={DISCORD_CLIENT_ID}&response_type=code&redirect_uri={redirect_url}&scope=identify+guilds"
     return redirect(discord_auth_url)
 
 @app.route('/callback')
@@ -23,12 +31,14 @@ def callback():
     if not code:
         return redirect('/')
     
+    redirect_url = REDIRECT_URI if REDIRECT_URI else f"{request.host_url.rstrip('/')}/callback"
+    
     data = {
         'client_id': DISCORD_CLIENT_ID,
         'client_secret': DISCORD_CLIENT_SECRET,
         'grant_type': 'authorization_code',
         'code': code,
-        'redirect_uri': REDIRECT_URI
+        'redirect_uri': redirect_url
     }
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     
@@ -54,7 +64,6 @@ def get_guilds():
             if res.status_code == 200:
                 for g in res.json():
                     permissions = int(g.get('permissions', 0))
-                    # جلب السيرفرات التي يملك فيها صلاحيات إدارية
                     has_permission = (
                         g.get('owner') or 
                         (permissions & 0x8) != 0 or 
