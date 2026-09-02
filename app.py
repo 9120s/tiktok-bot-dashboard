@@ -4,11 +4,11 @@ from flask import Flask, request, jsonify, redirect, render_template_string
 
 app = Flask(__name__)
 
-DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID", "1544289467853045861")
-DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "").strip()
-REDIRECT_URI = os.getenv("REDIRECT_URI", "https://tiktok-bot-2s2-dashboard.onrender.com/callback").strip()
+# تعديل أسماء المتغيرات لتطابق الموجود في Render تماماً
+DISCORD_CLIENT_ID = os.getenv("CLIENT_ID", os.getenv("DISCORD_CLIENT_ID", "1544289467853045861")).strip()
+DISCORD_CLIENT_SECRET = os.getenv("CLIENT_SECRET", os.getenv("DISCORD_CLIENT_SECRET", "")).strip()
 
-SERVER_INVITE_URL = "https://discord.gg/" 
+SERVER_INVITE_URL = "https://discord.gg/YOUR_INVITE_CODE"
 
 HTML_LAYOUT = """
 <!DOCTYPE html>
@@ -54,9 +54,7 @@ HTML_LAYOUT = """
             justify-content: space-between;
             padding: 1.5rem 1rem;
             position: fixed;
-            top: 0;
-            bottom: 0;
-            right: 0;
+            top: 0; bottom: 0; right: 0;
             z-index: 100;
         }
 
@@ -77,7 +75,7 @@ HTML_LAYOUT = """
             margin-top: 1.5rem;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 8px;
         }
 
         .nav-item a {
@@ -126,16 +124,9 @@ HTML_LAYOUT = """
             border-radius: 16px;
             padding: 2.5rem;
             width: 100%;
-            max-width: 480px;
+            max-width: 520px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
             text-align: center;
-            position: relative;
-        }
-
-        .card h2 {
-            font-size: 1.8rem;
-            margin-bottom: 0.5rem;
-            color: var(--text-main);
         }
 
         .btn-tiktok {
@@ -155,11 +146,6 @@ HTML_LAYOUT = """
             border: none;
             cursor: pointer;
             box-shadow: 0 0 15px rgba(254, 44, 85, 0.5);
-        }
-
-        .btn-tiktok:hover {
-            background: #e02649;
-            box-shadow: 0 0 25px rgba(254, 44, 85, 0.8);
         }
 
         select {
@@ -194,6 +180,7 @@ HTML_LAYOUT = """
 </head>
 <body>
 
+    <!-- القائمة الجانبية -->
     <aside class="sidebar">
         <div>
             <div class="brand">
@@ -203,6 +190,12 @@ HTML_LAYOUT = """
             <ul class="nav-menu">
                 <li class="nav-item active">
                     <a href="/"><i class="fa-solid fa-house"></i> الرئيسية</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#"><i class="fa-solid fa-trophy"></i> أفضل ثالث للبثوث</a>
+                </li>
+                <li class="nav-item">
+                    <a href="#"><i class="fa-solid fa-bookmark"></i> السيرفرات المحفوظة</a>
                 </li>
             </ul>
         </div>
@@ -216,10 +209,11 @@ HTML_LAYOUT = """
         </ul>
     </aside>
 
+    <!-- المحتوى الرئيسي -->
     <main class="main-content">
         <div class="card">
             <h2>إدارة البوت</h2>
-            <p style="color: var(--text-muted); margin-bottom: 2rem;">اختر السيرفر للبدء في التحكم</p>
+            <p style="color: var(--text-muted); margin-bottom: 2rem;">قم بتسجيل الدخول لاختيار السيرفر والتحكم بالإعدادات</p>
             
             <div id="content">
                 <a href="/login" class="btn-tiktok">
@@ -235,16 +229,16 @@ HTML_LAYOUT = """
         const err = urlParams.get('err');
 
         if (err) {
-            document.getElementById('content').innerHTML += `<div class="error">خطأ في الاعتماد (401): يرجى إعادة نسخ Client Secret من ديسكورد وحفظه في Render</div>`;
+            document.getElementById('content').innerHTML += `<div class="error">خطأ في التسجيل (${err}): يرجى التأكد من الـ Client Secret في Render.</div>`;
         }
 
         if (token) {
-            document.getElementById('content').innerHTML = '<p style="color:var(--tiktok-cyan);"><i class="fa-solid fa-spinner fa-spin"></i> جاري جلب جميع سيرفراتك...</p>';
+            document.getElementById('content').innerHTML = '<p style="color:var(--tiktok-cyan);"><i class="fa-solid fa-spinner fa-spin"></i> جاري تحميل جميع السيرفرات...</p>';
             fetch('/api/guilds?token=' + token)
                 .then(res => res.json())
                 .then(data => {
                     if (data.guilds && data.guilds.length > 0) {
-                        let html = '<label style="display:block; text-align:right; margin-bottom:8px; font-weight:bold; color:var(--text-main);">قائمة السيرفرات المتوفرة:</label><select id="guildSelect">';
+                        let html = '<label style="display:block; text-align:right; margin-bottom:8px; font-weight:bold;">اختر السيرفر:</label><select id="guildSelect">';
                         data.guilds.forEach(g => {
                             html += `<option value="${g.id}">${g.name}</option>`;
                         });
@@ -255,7 +249,7 @@ HTML_LAYOUT = """
                     }
                 })
                 .catch(err => {
-                    document.getElementById('content').innerHTML = '<div class="error">حدث خطأ أثناء تحميل السيرفرات.</div>';
+                    document.getElementById('content').innerHTML = '<div class="error">حدث خطأ أثناء جلب البيانات.</div>';
                 });
         }
     </script>
@@ -263,13 +257,20 @@ HTML_LAYOUT = """
 </html>
 """
 
+def get_redirect_uri():
+    redirect_env = os.getenv("REDIRECT_URI", "").strip()
+    if redirect_env:
+        return redirect_env
+    return request.host_url.rstrip('/') + '/callback'
+
 @app.route('/')
 def index():
     return render_template_string(HTML_LAYOUT, server_invite=SERVER_INVITE_URL)
 
 @app.route('/login')
 def login():
-    discord_auth_url = f"https://discord.com/oauth2/authorize?client_id={DISCORD_CLIENT_ID}&response_type=code&redirect_uri={REDIRECT_URI}&scope=identify+guilds"
+    redirect_uri = get_redirect_uri()
+    discord_auth_url = f"https://discord.com/oauth2/authorize?client_id={DISCORD_CLIENT_ID}&response_type=code&redirect_uri={redirect_uri}&scope=identify+guilds"
     return redirect(discord_auth_url)
 
 @app.route('/callback')
@@ -283,7 +284,7 @@ def callback():
         'client_secret': DISCORD_CLIENT_SECRET,
         'grant_type': 'authorization_code',
         'code': code,
-        'redirect_uri': REDIRECT_URI
+        'redirect_uri': get_redirect_uri()
     }
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     
@@ -308,7 +309,6 @@ def get_guilds():
             res = requests.get('https://discord.com/api/v10/users/@me/guilds', headers=headers)
             if res.status_code == 200:
                 for g in res.json():
-                    # إظهار كل السيرفرات التي يتواجد فيها المستخدم ولديه فيها أي رتبة/صلاحية
                     guilds_list.append({"id": str(g['id']), "name": g['name']})
         except Exception as e:
             print("Fetch guilds error:", e)
