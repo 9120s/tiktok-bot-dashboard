@@ -1,6 +1,5 @@
 import os
 import requests
-import threading
 from flask import Flask, render_template, request, jsonify, redirect
 
 app = Flask(__name__, template_folder='templates')
@@ -9,24 +8,9 @@ DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID", "1544289467853045861")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
 REDIRECT_URI = os.getenv("REDIRECT_URI", "https://tiktok-bot-2s2-dashboard.onrender.com/callback")
 
-def run_discord_bot():
-    try:
-        from main_bot import bot
-        bot_token = os.getenv("DISCORD_BOT_TOKEN") or os.getenv("BOT_TOKEN")
-        if bot_token and not bot.is_ready():
-            bot.run(bot_token)
-    except Exception as e:
-        print("Bot thread error:", e)
-
-# تشغيل البوت في الخلفية بأمان
-threading.Thread(target=run_discord_bot, daemon=True).start()
-
 @app.route('/')
 def index():
-    try:
-        return render_template('index.html')
-    except Exception as e:
-        return f"Template Error: {str(e)}", 500
+    return render_template('index.html')
 
 @app.route('/login')
 def login():
@@ -53,10 +37,8 @@ def callback():
         if r.status_code == 200:
             token = r.json().get('access_token')
             return redirect(f'/?token={token}')
-        else:
-            print("OAuth2 Error:", r.status_code, r.text)
     except Exception as e:
-        print("Callback Exception:", e)
+        print("Callback Error:", e)
         
     return redirect('/')
 
@@ -72,6 +54,7 @@ def get_guilds():
             if res.status_code == 200:
                 for g in res.json():
                     permissions = int(g.get('permissions', 0))
+                    # جلب السيرفرات التي يملك فيها صلاحيات إدارية
                     has_permission = (
                         g.get('owner') or 
                         (permissions & 0x8) != 0 or 
@@ -84,15 +67,7 @@ def get_guilds():
                     if has_permission:
                         guilds_list.append({"id": str(g['id']), "name": g['name']})
         except Exception as e:
-            print("User guilds fetch error:", e)
-
-    if not guilds_list:
-        try:
-            from main_bot import bot
-            if bot.is_ready():
-                guilds_list = [{"id": str(g.id), "name": g.name} for g in bot.guilds]
-        except Exception as e:
-            print("Bot guilds error:", e)
+            print("Fetch guilds error:", e)
 
     return jsonify({"guilds": guilds_list})
 
