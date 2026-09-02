@@ -30,9 +30,9 @@ def save_config(data):
     with open(CONFIG_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=4)
 
-def send_discord_alert(channel_id, tiktok_user):
+def send_discord_alert(channel_id, tiktok_user, is_test=False):
     if not BOT_TOKEN:
-        print("[ERROR] BOT_TOKEN is missing in environment variables!")
+        print("[ERROR] BOT_TOKEN is missing!")
         return False
     
     url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
@@ -40,34 +40,40 @@ def send_discord_alert(channel_id, tiktok_user):
         "Authorization": f"Bot {BOT_TOKEN}",
         "Content-Type": "application/json"
     }
+    
+    desc = f"بدأ **@{tiktok_user}** بث جديد على تيك توك الآن! 🔥\n\n[اضغط هنا لمشاهدة البث مباشرة](https://www.tiktok.com/@{tiktok_user}/live)"
+    if is_test:
+        desc = f"⚙️ **تم تفعيل التنبيهات السريعة بنجاح!**\nتم ربط حساب **@{tiktok_user}** والمراقبة التلقائية تعمل الآن بدون تأخير.\n\n[رابط القناة](https://www.tiktok.com/@{tiktok_user})"
+
     payload = {
         "embeds": [{
-            "title": "🔴 بث جديد مباشر الان!",
-            "description": f"بدأ **@{tiktok_user}** بث جديد على تيك توك الآن! 🔥\n\n[اضغط هنا لمشاهدة البث مباشرة](https://www.tiktok.com/@{tiktok_user}/live)",
-            "color": 16657493
+            "title": "🔴 بث جديد مباشر الان!" if not is_test else "✅ تم تفعيل التنبيهات بنجاح",
+            "description": desc,
+            "color": 16657493 if not is_test else 4898432
         }]
     }
     try:
         res = requests.post(url, json=payload, headers=headers)
-        print(f"[DISCORD LOG] Status: {res.status_code}, Response: {res.text}")
         return res.status_code in [200, 201]
     except Exception as e:
-        print(f"[DISCORD EXCEPTION] {e}")
+        print(f"[DISCORD ERROR] {e}")
         return False
 
 async def start_tiktok_listener(tiktok_user, channel_id):
+    # إعداد العميل للاستجابة بأسرع معدل فحص
     client = TikTokLiveClient(unique_id=tiktok_user)
     
     @client.on(ConnectEvent)
     async def on_connect(event: ConnectEvent):
-        print(f"[TIKTOK LIVE] Connected successfully to @{tiktok_user}!")
         send_discord_alert(channel_id, tiktok_user)
 
-    try:
-        print(f"[TIKTOK MONITOR] Starting listener for @{tiktok_user}...")
-        await client.start()
-    except Exception as e:
-        print(f"[TIKTOK ERROR] Monitor failed for @{tiktok_user}: {e}")
+    while True:
+        try:
+            await client.start()
+        except Exception as e:
+            print(f"[TIKTOK ERROR] {tiktok_user}: {e}")
+        # أعِد محاولة الفحص كل 10 ثوانٍ لضمان اكتشاف البث فور انطلاقه
+        await asyncio.sleep(10)
 
 def run_listener_in_thread(tiktok_user, channel_id):
     loop = asyncio.new_event_loop()
@@ -159,13 +165,6 @@ HTML_LAYOUT = """
             background: var(--tiktok-pink); color: #fff; padding: 14px 28px; border-radius: 10px;
             font-weight: bold; font-size: 1rem; width: 100%; border: none; cursor: pointer; margin-top: 10px; text-decoration: none;
         }
-
-        .btn-test {
-            background: transparent; color: var(--tiktok-cyan); border: 1px solid var(--tiktok-cyan);
-            padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 0.9rem; width: 100%;
-            cursor: pointer; margin-top: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-        }
-        .btn-test:hover { background: rgba(37, 244, 238, 0.1); }
 
         .form-group { margin-bottom: 1.2rem; }
         .form-group label { display: block; margin-bottom: 6px; font-weight: bold; font-size: 0.95rem; }
@@ -281,7 +280,6 @@ HTML_LAYOUT = """
                             <div class="form-group"><label>رقم/آيدي روم التنبيهات (Channel ID):</label><input type="text" id="channelId" placeholder="مثال: 1538986763622813766"></div>
                             
                             <button onclick="saveSettings()" class="btn-tiktok"><i class="fa-solid fa-floppy-disk"></i> حفظ وتفعيل التنبيه الآلي</button>
-                            <button onclick="testNotification()" class="btn-test"><i class="fa-solid fa-paper-plane"></i> اختبار إرسال تنبيه تجريبي الآن</button>
 
                             <div id="responseMsg"></div>`;
                         document.getElementById('content').innerHTML = html;
@@ -302,6 +300,8 @@ HTML_LAYOUT = """
                 return;
             }
 
+            msgDiv.innerHTML = '<div style="color:var(--text-muted); text-align:center; margin-top:10px;">جاري التفعيل...</div>';
+
             fetch('/api/save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -310,34 +310,9 @@ HTML_LAYOUT = """
             .then(res => res.json())
             .then(data => {
                 if(data.success) {
-                    msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-circle-check"></i> تم الحفظ وتفعيل الاستماع التلقائي!</div>';
-                }
-            });
-        }
-
-        function testNotification() {
-            const tiktokUser = document.getElementById('tiktokUser').value.trim();
-            const channelId = document.getElementById('channelId').value.trim();
-            const msgDiv = document.getElementById('responseMsg');
-
-            if (!tiktokUser || !channelId) {
-                msgDiv.innerHTML = '<div class="error">يرجى ادخال اليوزر ورقم الروم للاختبار.</div>';
-                return;
-            }
-
-            msgDiv.innerHTML = '<div style="color:var(--text-muted); text-align:center; margin-top:10px;">جاري اختبار الإرسال...</div>';
-
-            fetch('/api/test-alert', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tiktok_user: tiktokUser, channel_id: channelId })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if(data.success) {
-                    msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-check-double"></i> تم إرسال التنبيه التجريبي إلى الديسكورد بنجاح!</div>';
+                    msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-circle-check"></i> تم الحفظ وتفعيل التنبيه بنجاح!</div>';
                 } else {
-                    msgDiv.innerHTML = '<div class="error"><i class="fa-solid fa-triangle-exclamation"></i> فشل الإرسال! تأكد من توكن البوت وصلاحياته داخل الروم.</div>';
+                    msgDiv.innerHTML = '<div class="error">حدث خطأ أثناء حفظ الإعدادات!</div>';
                 }
             });
         }
@@ -436,21 +411,15 @@ def save_settings():
     all_configs[guild_id] = {"tiktok_user": tiktok_user, "channel_id": channel_id}
     save_config(all_configs)
 
-    if guild_id not in active_monitors:
-        t = threading.Thread(target=run_listener_in_thread, args=(tiktok_user, channel_id), daemon=True)
-        t.start()
-        active_monitors[guild_id] = t
+    # إرسال تنبيه تأكيدي فوراً مخفي عن الواجهة
+    threading.Thread(target=send_discord_alert, args=(channel_id, tiktok_user, True), daemon=True).start()
+
+    # بدء أو تحديث الاستماع المباشر
+    t = threading.Thread(target=run_listener_in_thread, args=(tiktok_user, channel_id), daemon=True)
+    t.start()
+    active_monitors[guild_id] = t
 
     return jsonify({"success": True})
-
-@app.route('/api/test-alert', methods=['POST'])
-def test_alert():
-    data = request.json
-    tiktok_user = data.get('tiktok_user', '').replace('@', '').strip()
-    channel_id = data.get('channel_id', '').strip()
-
-    success = send_discord_alert(channel_id, tiktok_user)
-    return jsonify({"success": success})
 
 if __name__ == '__main__':
     restart_all_listeners()
