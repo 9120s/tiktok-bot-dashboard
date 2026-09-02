@@ -4,7 +4,7 @@ import threading
 import requests
 import jwt
 from datetime import datetime, timedelta
-from flask import Flask, redirect, request, render_template_string
+from flask import Flask, redirect, request, render_template_string, jsonify
 import discord
 from discord.ext import commands
 from waitress import serve
@@ -23,9 +23,7 @@ CLIENT_SECRET = os.environ.get("CLIENT_SECRET") or os.environ.get("DISCORD_CLIEN
 REDIRECT_URI = os.environ.get("REDIRECT_URI") or os.environ.get("DISCORD_REDIRECT_URI", "")
 BOT_TOKEN = os.environ.get("BOT_TOKEN") or os.environ.get("DISCORD_BOT_TOKEN", "")
 
-# رابط سيرفر الديسكورد الخاص بك
 DISCORD_SERVER_INVITE = "https://discord.gg/TQUFzyxM7"
-
 API_BASE_URL = "https://discord.com/api/v10"
 CONFIG_FILE = "guilds_config.json"
 
@@ -256,6 +254,16 @@ DASHBOARD_HTML = """
             font-weight: bold;
         }
 
+        .alert-success {
+            display: none;
+            padding: 12px;
+            background-color: #2ed573;
+            color: white;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
         .tab-content { display: none; }
         .tab-content.active { display: block; }
     </style>
@@ -274,7 +282,6 @@ DASHBOARD_HTML = """
 
     <div class="overlay" id="overlay" onclick="toggleMenu()"></div>
 
-    <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <h3>القائمة الرئيسية</h3>
@@ -308,11 +315,13 @@ DASHBOARD_HTML = """
             <div id="settings" class="tab-content active">
                 <div class="card">
                     <h2 style="margin-bottom: 20px;"><i class="fa-solid fa-bell" style="color: var(--accent-color);"></i> إعدادات التنبيهات</h2>
-                    <form action="/save-settings" method="POST">
-                        <input type="hidden" name="token" value="{{ token }}">
+                    
+                    <div id="save-msg" class="alert-success">تم حفظ الإعدادات بنجاح! ✅</div>
+
+                    <form id="settings-form" onsubmit="saveSettings(event)">
                         <div class="form-group">
                             <label>السيرفر المستهدف:</label>
-                            <select name="guild_id" class="form-control" onchange="window.location.href='/?token={{ token }}&guild_id=' + this.value">
+                            <select id="guild_select" name="guild_id" class="form-control" onchange="fetchGuildConfig(this.value)">
                                 {% for guild in guilds %}
                                     <option value="{{ guild['id'] }}" {% if guild['id'] == selected_guild_id %}selected{% endif %}>{{ guild['name'] }}</option>
                                 {% endfor %}
@@ -321,12 +330,12 @@ DASHBOARD_HTML = """
 
                         <div class="form-group">
                             <label>رقم روم التنبيهات (Channel ID):</label>
-                            <input type="text" name="channel_id" class="form-control" value="{{ current_config.get('channel_id', '') }}" placeholder="أدخل ID القناة هنا" required>
+                            <input type="text" id="channel_id" name="channel_id" class="form-control" value="{{ current_config.get('channel_id', '') }}" placeholder="أدخل ID القناة هنا" required>
                         </div>
 
                         <div class="form-group">
                             <label>عنوان التنبيه:</label>
-                            <input type="text" name="top_title" class="form-control" value="{{ current_config.get('top_title', '') }}" placeholder="مثال: البث مباشر الآن!">
+                            <input type="text" id="top_title" name="top_title" class="form-control" value="{{ current_config.get('top_title', '') }}" placeholder="مثال: البث مباشر الآن!">
                         </div>
 
                         <button type="submit" class="btn-submit">جاهز للبث 🔥</button>
@@ -352,11 +361,12 @@ DASHBOARD_HTML = """
 
         if (tokenParam) {
             localStorage.setItem('bot_token', tokenParam);
-        } else {
-            const savedToken = localStorage.getItem('bot_token');
-            if (savedToken && !window.location.search.includes('logout=1')) {
-                window.location.href = '/?token=' + savedToken;
-            }
+        }
+
+        const currentToken = localStorage.getItem('bot_token');
+
+        if (!urlParams.get('token') && currentToken && !window.location.search.includes('logout=1')) {
+            window.location.href = '/?token=' + currentToken;
         }
 
         function logout() {
@@ -376,6 +386,35 @@ DASHBOARD_HTML = """
             document.getElementById(tabId).classList.add('active');
             event.currentTarget.classList.add('active');
             toggleMenu();
+        }
+
+        function fetchGuildConfig(guildId) {
+            if (!currentToken) return;
+            window.location.href = '/?token=' + currentToken + '&guild_id=' + guildId;
+        }
+
+        async function saveSettings(e) {
+            e.preventDefault();
+            const guildId = document.getElementById('guild_select').value;
+            const channelId = document.getElementById('channel_id').value;
+            const topTitle = document.getElementById('top_title').value;
+
+            const res = await fetch('/api/save-settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    token: currentToken,
+                    guild_id: guildId,
+                    channel_id: channelId,
+                    top_title: topTitle
+                })
+            });
+
+            if (res.ok) {
+                const msg = document.getElementById('save-msg');
+                msg.style.display = 'block';
+                setTimeout(() => { msg.style.display = 'none'; }, 3000);
+            }
         }
     </script>
 </body>
@@ -463,24 +502,26 @@ def callback():
     except Exception:
         return redirect('/login')
 
-@app.route('/save-settings', methods=['POST'])
-def save_settings():
-    token = request.form.get('token')
+@app.route('/api/save-settings', methods=['POST'])
+def api_save_settings():
+    data = request.get_json() or {}
+    token = data.get('token')
     payload = decode_token(token) if token else None
 
     if not payload:
-        return redirect('/login')
+        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
 
-    guild_id = request.form.get('guild_id')
+    guild_id = data.get('guild_id')
 
     if guild_id:
         GUILDS_CONFIG[str(guild_id)] = {
-            "channel_id": request.form.get('channel_id'),
-            "top_title": request.form.get('top_title')
+            "channel_id": data.get('channel_id'),
+            "top_title": data.get('top_title')
         }
         save_configs()
+        return jsonify({'status': 'success'})
 
-    return redirect(f'/?token={token}&guild_id={guild_id}')
+    return jsonify({'status': 'error', 'message': 'Invalid Guild ID'}), 400
 
 # --------------------------------------------------
 # 4. تشغيل السيرفر والبوت
