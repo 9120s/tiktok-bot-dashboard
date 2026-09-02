@@ -61,7 +61,7 @@ async def start_tiktok_listener(tiktok_user, channel_id):
         except Exception as e:
             print(f"[TIKTOK CHECK ERROR] {tiktok_user}: {e}")
         
-        await asyncio.sleep(30)
+        await asyncio.sleep(20)
 
 def run_listener_in_thread(tiktok_user, channel_id):
     loop = asyncio.new_event_loop()
