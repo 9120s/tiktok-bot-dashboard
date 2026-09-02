@@ -130,19 +130,18 @@ HTML_LAYOUT = """
         }
         .nav-item a:hover, .nav-item.active a { background: #27272a; color: var(--tiktok-cyan); }
 
-        .saved-servers-list { list-style: none; display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+        .saved-servers-list { list-style: none; display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto; }
         .saved-server-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #18181b; border-radius: 6px; font-size: 0.85rem; border: 1px solid var(--border-color); }
         .saved-server-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px; }
 
-        .top-3-container { display: flex; flex-direction: column; gap: 10px; margin-bottom: 1.5rem; }
-        .top-card { background: #18181b; border: 1px solid var(--border-color); border-radius: 12px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; }
-        .top-card .rank { font-size: 1.3rem; font-weight: bold; width: 30px; text-align: center; }
-        .top-card:nth-child(1) .rank { color: #ffd700; }
-        .top-card:nth-child(2) .rank { color: #c0c0c0; }
-        .top-card:nth-child(3) .rank { color: #cd7f32; }
-        .top-card .info { flex: 1; margin-right: 12px; }
-        .top-card .info .user { font-weight: bold; color: #fff; }
-        .top-card .info .server-name { font-size: 0.8rem; color: var(--text-muted); }
+        /* تنسيق قائمة أفضل ثوالث في القائمة الجانبية */
+        .top3-sidebar-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+        .top3-sidebar-item {
+            background: #18181b; border: 1px solid var(--border-color); border-radius: 8px;
+            padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem;
+        }
+        .top3-sidebar-item .user { font-weight: bold; color: var(--tiktok-cyan); }
+        .top3-sidebar-item .server-id { font-size: 0.75rem; color: var(--text-muted); }
 
         .join-server-btn {
             background: linear-gradient(45deg, var(--tiktok-pink), var(--tiktok-cyan));
@@ -196,6 +195,12 @@ HTML_LAYOUT = """
             <ul class="saved-servers-list" id="savedServersMenu">
                 <li style="color:var(--text-muted); font-size:0.8rem; text-align:center;">جاري التحميل...</li>
             </ul>
+
+            <!-- قسم أفضل ثوالث في الشريط الجانبي -->
+            <div class="section-title"><i class="fa-solid fa-crown"></i> أفضل ثوالث</div>
+            <ul class="top3-sidebar-list" id="top3SidebarMenu">
+                <li style="color:var(--text-muted); font-size:0.8rem; text-align:center;">لا توجد بيانات</li>
+            </ul>
         </div>
 
         <ul class="nav-menu" style="margin-top: 1.5rem;">
@@ -215,17 +220,6 @@ HTML_LAYOUT = """
             <h2>إدارة التنبيهات</h2>
             <p class="desc">اختر السيرفر وقم بإعداد تنبيهات البث المباشر</p>
 
-            <div id="top3Section">
-                <div class="section-title" style="text-align:center; font-size:1rem; margin-bottom:12px; color: var(--tiktok-cyan);">
-                    👑 أفضل ثوالث في البثوث المحفوظة
-                </div>
-                <div class="top-3-container" id="top3Container">
-                    <div style="text-align:center; color:var(--text-muted); font-size:0.85rem; padding: 10px;">
-                        جاري تحميل البيانات...
-                    </div>
-                </div>
-            </div>
-
             <div id="content">
                 <a href="/login" class="btn-tiktok"><i class="fa-brands fa-discord"></i> تسجيل الدخول عبر ديسكورد</a>
             </div>
@@ -240,34 +234,32 @@ HTML_LAYOUT = """
             .then(res => res.json())
             .then(data => {
                 const menu = document.getElementById('savedServersMenu');
-                const top3 = document.getElementById('top3Container');
+                const top3Menu = document.getElementById('top3SidebarMenu');
 
                 if (data.configs && data.configs.length > 0) {
                     menu.innerHTML = '';
-                    top3.innerHTML = '';
+                    top3Menu.innerHTML = '';
 
                     data.configs.forEach((item, index) => {
+                        // إضافة للقائمة الجانبية (السيرفرات المحفوظة)
                         menu.innerHTML += `
                             <li class="saved-server-item">
                                 <span><i class="fa-solid fa-hashtag"></i> ${item.guild_id}</span>
                                 <strong style="color:var(--tiktok-cyan)">@${item.tiktok_user}</strong>
                             </li>`;
 
+                        // إضافة لأفضل ثوالث بالأسفل (أول 3 سيرفرات وبدون أرقام #)
                         if (index < 3) {
-                            top3.innerHTML += `
-                                <div class="top-card">
-                                    <div class="rank">#${index + 1}</div>
-                                    <div class="info">
-                                        <div class="user">@${item.tiktok_user}</div>
-                                        <div class="server-name">روم التنبيه: ${item.channel_id}</div>
-                                    </div>
-                                    <i class="fa-solid fa-signal" style="color:var(--tiktok-cyan)"></i>
-                                </div>`;
+                            top3Menu.innerHTML += `
+                                <li class="top3-sidebar-item">
+                                    <span class="user">@${item.tiktok_user}</span>
+                                    <span class="server-id">${item.guild_id}</span>
+                                </li>`;
                         }
                     });
                 } else {
                     menu.innerHTML = '<li style="color:var(--text-muted); font-size:0.8rem; text-align:center; padding:5px;">لا توجد سيرفرات محفوظة</li>';
-                    top3.innerHTML = '<div style="text-align:center; color:var(--text-muted); font-size:0.85rem; background:#18181b; padding:12px; border-radius:8px; border:1px solid var(--border-color);">قم بإضافة إعدادات سيرفر لأول مرة لتدخل في قائمة أفضل ثوالث 🚀</div>';
+                    top3Menu.innerHTML = '<li style="color:var(--text-muted); font-size:0.8rem; text-align:center; padding:5px;">لا توجد ثوالث حالياً</li>';
                 }
             });
 
@@ -409,7 +401,6 @@ def get_guilds():
                 if not data:
                     break
                 for g in data:
-                    # فحص الصلاحيات: هل المستخدم مالك أو يملك Administrator (0x8) أو Manage Server (0x20)
                     permissions = int(g.get('permissions', 0))
                     is_owner = g.get('owner', False)
                     is_admin = (permissions & 0x8) == 0x8
