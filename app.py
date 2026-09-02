@@ -1,5 +1,4 @@
 import os
-import json
 import asyncio
 import threading
 import requests
@@ -14,21 +13,9 @@ DISCORD_CLIENT_SECRET = os.getenv("CLIENT_SECRET", os.getenv("DISCORD_CLIENT_SEC
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 SERVER_INVITE_URL = os.getenv("SERVER_INVITE_URL", "https://discord.gg/YOUR_INVITE_CODE").strip()
 
-CONFIG_FILE = "config.json"
+# ذاكرة رئيسية لحفظ البيانات أثناء عمل السيرفر
+SAVED_CONFIGS = {}
 active_monitors = {}
-
-def load_config():
-    if os.path.exists(CONFIG_FILE):
-        try:
-            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            return {}
-    return {}
-
-def save_config(data):
-    with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
 
 def send_discord_alert(channel_id, tiktok_user, is_test=False):
     if not BOT_TOKEN:
@@ -43,7 +30,7 @@ def send_discord_alert(channel_id, tiktok_user, is_test=False):
     
     desc = f"بدأ **@{tiktok_user}** بث جديد على تيك توك الآن! 🔥\n\n[اضغط هنا لمشاهدة البث مباشرة](https://www.tiktok.com/@{tiktok_user}/live)"
     if is_test:
-        desc = f"⚙️ **تم تفعيل التنبيهات السريعة بنجاح!**\nتم ربط حساب **@{tiktok_user}** والمراقبة التلقائية تعمل الآن بدون تأخير.\n\n[رابط القناة](https://www.tiktok.com/@{tiktok_user})"
+        desc = f"⚙️ **تم الربط بنجاح!**\nحساب **@{tiktok_user}** متصل الآن بالمراقبة التلقائية.\n\n[رابط القناة](https://www.tiktok.com/@{tiktok_user})"
 
     payload = {
         "embeds": [{
@@ -60,7 +47,6 @@ def send_discord_alert(channel_id, tiktok_user, is_test=False):
         return False
 
 async def start_tiktok_listener(tiktok_user, channel_id):
-    # إعداد العميل للاستجابة بأسرع معدل فحص
     client = TikTokLiveClient(unique_id=tiktok_user)
     
     @client.on(ConnectEvent)
@@ -72,24 +58,12 @@ async def start_tiktok_listener(tiktok_user, channel_id):
             await client.start()
         except Exception as e:
             print(f"[TIKTOK ERROR] {tiktok_user}: {e}")
-        # أعِد محاولة الفحص كل 10 ثوانٍ لضمان اكتشاف البث فور انطلاقه
         await asyncio.sleep(10)
 
 def run_listener_in_thread(tiktok_user, channel_id):
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     loop.run_until_complete(start_tiktok_listener(tiktok_user, channel_id))
-
-def restart_all_listeners():
-    configs = load_config()
-    for guild_id, settings in configs.items():
-        tiktok_user = settings.get("tiktok_user")
-        channel_id = settings.get("channel_id")
-        
-        if tiktok_user and channel_id and guild_id not in active_monitors:
-            t = threading.Thread(target=run_listener_in_thread, args=(tiktok_user, channel_id), daemon=True)
-            t.start()
-            active_monitors[guild_id] = t
 
 # --- HTML Layout ---
 
@@ -229,36 +203,40 @@ HTML_LAYOUT = """
         const urlParams = new URLSearchParams(window.location.search);
         const token = urlParams.get('token');
 
-        fetch('/api/saved-configs')
-            .then(res => res.json())
-            .then(data => {
-                const menu = document.getElementById('savedServersMenu');
-                const top3Menu = document.getElementById('top3SidebarMenu');
+        function reloadSidebar() {
+            fetch('/api/saved-configs')
+                .then(res => res.json())
+                .then(data => {
+                    const menu = document.getElementById('savedServersMenu');
+                    const top3Menu = document.getElementById('top3SidebarMenu');
 
-                if (data.configs && data.configs.length > 0) {
-                    menu.innerHTML = '';
-                    top3Menu.innerHTML = '';
+                    if (data.configs && data.configs.length > 0) {
+                        menu.innerHTML = '';
+                        top3Menu.innerHTML = '';
 
-                    data.configs.forEach((item, index) => {
-                        menu.innerHTML += `
-                            <li class="saved-server-item">
-                                <span><i class="fa-solid fa-hashtag"></i> ${item.guild_id}</span>
-                                <strong style="color:var(--tiktok-cyan)">@${item.tiktok_user}</strong>
-                            </li>`;
-
-                        if (index < 3) {
-                            top3Menu.innerHTML += `
-                                <li class="top3-sidebar-item">
-                                    <span class="user">@${item.tiktok_user}</span>
-                                    <span class="server-id">${item.guild_id}</span>
+                        data.configs.forEach((item, index) => {
+                            menu.innerHTML += `
+                                <li class="saved-server-item">
+                                    <span><i class="fa-solid fa-hashtag"></i> ${item.guild_id}</span>
+                                    <strong style="color:var(--tiktok-cyan)">@${item.tiktok_user}</strong>
                                 </li>`;
-                        }
-                    });
-                } else {
-                    menu.innerHTML = '<li style="color:var(--text-muted); font-size:0.8rem; text-align:center; padding:5px;">لا توجد سيرفرات محفوظة</li>';
-                    top3Menu.innerHTML = '<li style="color:var(--text-muted); font-size:0.8rem; text-align:center; padding:5px;">لا توجد ثوالث حالياً</li>';
-                }
-            });
+
+                            if (index < 3) {
+                                top3Menu.innerHTML += `
+                                    <li class="top3-sidebar-item">
+                                        <span class="user">@${item.tiktok_user}</span>
+                                        <span class="server-id">${item.guild_id}</span>
+                                    </li>`;
+                            }
+                        });
+                    } else {
+                        menu.innerHTML = '<li style="color:var(--text-muted); font-size:0.8rem; text-align:center; padding:5px;">لا توجد سيرفرات محفوظة</li>';
+                        top3Menu.innerHTML = '<li style="color:var(--text-muted); font-size:0.8rem; text-align:center; padding:5px;">لا توجد ثوالث حالياً</li>';
+                    }
+                });
+        }
+
+        reloadSidebar();
 
         if (token) {
             const authBtn = document.getElementById('authBtn');
@@ -300,7 +278,7 @@ HTML_LAYOUT = """
                 return;
             }
 
-            msgDiv.innerHTML = '<div style="color:var(--text-muted); text-align:center; margin-top:10px;">جاري التفعيل...</div>';
+            msgDiv.innerHTML = '<div style="color:var(--text-muted); text-align:center; margin-top:10px;">جاري التفعيل والحفظ...</div>';
 
             fetch('/api/save', {
                 method: 'POST',
@@ -311,6 +289,7 @@ HTML_LAYOUT = """
             .then(data => {
                 if(data.success) {
                     msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-circle-check"></i> تم الحفظ وتفعيل التنبيه بنجاح!</div>';
+                    reloadSidebar();
                 } else {
                     msgDiv.innerHTML = '<div class="error">حدث خطأ أثناء حفظ الإعدادات!</div>';
                 }
@@ -390,9 +369,8 @@ def get_guilds():
 
 @app.route('/api/saved-configs')
 def get_saved_configs():
-    configs = load_config()
     result = []
-    for g_id, data in configs.items():
+    for g_id, data in SAVED_CONFIGS.items():
         result.append({
             "guild_id": g_id,
             "tiktok_user": data.get("tiktok_user", ""),
@@ -407,14 +385,13 @@ def save_settings():
     tiktok_user = data.get('tiktok_user', '').replace('@', '').strip()
     channel_id = data.get('channel_id', '').strip()
 
-    all_configs = load_config()
-    all_configs[guild_id] = {"tiktok_user": tiktok_user, "channel_id": channel_id}
-    save_config(all_configs)
+    # حفظ مباشر في الذاكرة لتحديث القائمة الجانبية فوراً
+    SAVED_CONFIGS[guild_id] = {"tiktok_user": tiktok_user, "channel_id": channel_id}
 
-    # إرسال تنبيه تأكيدي فوراً مخفي عن الواجهة
+    # إرسال تنبيه تأكيدي مخفي للديسكورد فوراً
     threading.Thread(target=send_discord_alert, args=(channel_id, tiktok_user, True), daemon=True).start()
 
-    # بدء أو تحديث الاستماع المباشر
+    # تفعيل الاستماع للبث مباشرة
     t = threading.Thread(target=run_listener_in_thread, args=(tiktok_user, channel_id), daemon=True)
     t.start()
     active_monitors[guild_id] = t
@@ -422,6 +399,5 @@ def save_settings():
     return jsonify({"success": True})
 
 if __name__ == '__main__':
-    restart_all_listeners()
     port = int(os.environ.get('PORT', 10000))
     app.run(host='0.0.0.0', port=port)
