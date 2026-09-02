@@ -5,11 +5,10 @@ from flask import Flask, request, jsonify, redirect, render_template_string
 app = Flask(__name__)
 
 DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID", "1544289467853045861")
-DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
-REDIRECT_URI = os.getenv("REDIRECT_URI", "https://tiktok-bot-2s2-dashboard.onrender.com/callback")
+DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "").strip()
+REDIRECT_URI = os.getenv("REDIRECT_URI", "https://tiktok-bot-2s2-dashboard.onrender.com/callback").strip()
 
-# رابط دعوة سيرفرك
-SERVER_INVITE_URL = "https://discord.gg/YOUR_INVITE_CODE" 
+SERVER_INVITE_URL = "https://discord.gg/" 
 
 HTML_LAYOUT = """
 <!DOCTYPE html>
@@ -17,18 +16,18 @@ HTML_LAYOUT = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لوحة تحكم البوت</title>
+    <title>لوحة التحكم | TikTok Style</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
         :root {
-            --bg-main: #0f172a;
-            --bg-sidebar: #1e293b;
-            --bg-card: #1e293b;
-            --accent: #5865F2;
-            --accent-hover: #4752C4;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --border-color: #334155;
+            --bg-main: #121212;
+            --bg-sidebar: #000000;
+            --bg-card: #1e1e1e;
+            --tiktok-pink: #fe2c55;
+            --tiktok-cyan: #25f4ee;
+            --text-main: #ffffff;
+            --text-muted: #a1a1aa;
+            --border-color: #27272a;
         }
 
         * {
@@ -45,6 +44,7 @@ HTML_LAYOUT = """
             min-height: 100vh;
         }
 
+        /* Sidebar */
         .sidebar {
             width: 260px;
             background: var(--bg-sidebar);
@@ -64,16 +64,12 @@ HTML_LAYOUT = """
             display: flex;
             align-items: center;
             gap: 12px;
-            font-size: 1.2rem;
-            font-weight: bold;
+            font-size: 1.3rem;
+            font-weight: 800;
             color: var(--text-main);
             padding-bottom: 1.5rem;
             border-bottom: 1px solid var(--border-color);
-        }
-
-        .brand i {
-            color: var(--accent);
-            font-size: 1.5rem;
+            text-shadow: 2px 2px var(--tiktok-pink), -2px -2px var(--tiktok-cyan);
         }
 
         .nav-menu {
@@ -92,21 +88,28 @@ HTML_LAYOUT = """
             color: var(--text-muted);
             text-decoration: none;
             border-radius: 8px;
-            font-weight: 500;
+            font-weight: 600;
             transition: all 0.3s ease;
         }
 
         .nav-item a:hover, .nav-item.active a {
-            background: rgba(88, 101, 242, 0.15);
-            color: #fff;
+            background: #27272a;
+            color: var(--tiktok-cyan);
         }
 
         .join-server-btn {
-            background: linear-gradient(135deg, #5865F2, #eb459e);
-            color: white !important;
-            box-shadow: 0 4px 15px rgba(88, 101, 242, 0.3);
+            background: linear-gradient(45deg, var(--tiktok-pink), var(--tiktok-cyan));
+            color: #000 !important;
+            font-weight: 800 !important;
+            box-shadow: 0 4px 15px rgba(254, 44, 85, 0.4);
         }
 
+        .join-server-btn:hover {
+            opacity: 0.9;
+            transform: scale(1.02);
+        }
+
+        /* Main Content */
         .main-content {
             margin-right: 260px;
             flex: 1;
@@ -123,31 +126,40 @@ HTML_LAYOUT = """
             border-radius: 16px;
             padding: 2.5rem;
             width: 100%;
-            max-width: 500px;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+            max-width: 480px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
             text-align: center;
+            position: relative;
         }
 
-        .btn-discord {
+        .card h2 {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+            color: var(--text-main);
+        }
+
+        .btn-tiktok {
             display: inline-flex;
             align-items: center;
             justify-content: center;
             gap: 10px;
-            background: var(--accent);
+            background: var(--tiktok-pink);
             color: #fff;
             padding: 14px 28px;
             border-radius: 10px;
             text-decoration: none;
             font-weight: bold;
             font-size: 1rem;
-            transition: background 0.3s ease;
+            transition: all 0.3s ease;
             width: 100%;
             border: none;
             cursor: pointer;
+            box-shadow: 0 0 15px rgba(254, 44, 85, 0.5);
         }
 
-        .btn-discord:hover {
-            background: var(--accent-hover);
+        .btn-tiktok:hover {
+            background: #e02649;
+            box-shadow: 0 0 25px rgba(254, 44, 85, 0.8);
         }
 
         select {
@@ -156,19 +168,21 @@ HTML_LAYOUT = """
             margin-top: 15px;
             border-radius: 8px;
             border: 1px solid var(--border-color);
-            background: var(--bg-main);
-            color: #fff;
+            background: #000;
+            color: var(--tiktok-cyan);
             font-size: 1rem;
             outline: none;
+            font-weight: 600;
         }
 
         .error {
-            color: #f87171;
-            background: rgba(248, 113, 113, 0.1);
-            padding: 10px;
+            color: var(--tiktok-pink);
+            background: rgba(254, 44, 85, 0.1);
+            border: 1px solid var(--tiktok-pink);
+            padding: 12px;
             border-radius: 8px;
             margin-top: 15px;
-            font-size: 0.88rem;
+            font-size: 0.9rem;
         }
 
         @media (max-width: 768px) {
@@ -183,7 +197,7 @@ HTML_LAYOUT = """
     <aside class="sidebar">
         <div>
             <div class="brand">
-                <i class="fa-solid fa-robot"></i>
+                <i class="fa-brands fa-tiktok"></i>
                 <span>لوحة التحكم</span>
             </div>
             <ul class="nav-menu">
@@ -205,10 +219,10 @@ HTML_LAYOUT = """
     <main class="main-content">
         <div class="card">
             <h2>إدارة البوت</h2>
-            <p style="color: var(--text-muted); margin-bottom: 2rem;">اختر السيرفر للبدء في ضبط الإعدادات</p>
+            <p style="color: var(--text-muted); margin-bottom: 2rem;">اختر السيرفر للبدء في التحكم</p>
             
             <div id="content">
-                <a href="/login" class="btn-discord">
+                <a href="/login" class="btn-tiktok">
                     <i class="fa-brands fa-discord"></i> تسجيل الدخول عبر ديسكورد
                 </a>
             </div>
@@ -221,27 +235,27 @@ HTML_LAYOUT = """
         const err = urlParams.get('err');
 
         if (err) {
-            document.getElementById('content').innerHTML += `<div class="error">خطأ في عملية التسجيل: ${err}</div>`;
+            document.getElementById('content').innerHTML += `<div class="error">خطأ في الاعتماد (401): يرجى إعادة نسخ Client Secret من ديسكورد وحفظه في Render</div>`;
         }
 
         if (token) {
-            document.getElementById('content').innerHTML = '<p><i class="fa-solid fa-spinner fa-spin"></i> جاري تحميل السيرفرات...</p>';
+            document.getElementById('content').innerHTML = '<p style="color:var(--tiktok-cyan);"><i class="fa-solid fa-spinner fa-spin"></i> جاري جلب جميع سيرفراتك...</p>';
             fetch('/api/guilds?token=' + token)
                 .then(res => res.json())
                 .then(data => {
                     if (data.guilds && data.guilds.length > 0) {
-                        let html = '<label style="display:block; text-align:right; margin-bottom:8px; font-weight:bold;">السيرفرات التي تمتلك فيها رتبة:</label><select id="guildSelect">';
+                        let html = '<label style="display:block; text-align:right; margin-bottom:8px; font-weight:bold; color:var(--text-main);">قائمة السيرفرات المتوفرة:</label><select id="guildSelect">';
                         data.guilds.forEach(g => {
                             html += `<option value="${g.id}">${g.name}</option>`;
                         });
                         html += '</select>';
                         document.getElementById('content').innerHTML = html;
                     } else {
-                        document.getElementById('content').innerHTML = '<p>لم يتم العثور على سيرفرات تملك فيها رتبة بمصالحات إدارية أو تنظيمية.</p>';
+                        document.getElementById('content').innerHTML = '<p>لم يتم العثور على سيرفرات.</p>';
                     }
                 })
                 .catch(err => {
-                    document.getElementById('content').innerHTML = '<div class="error">حدث خطأ أثناء جلب السيرفرات.</div>';
+                    document.getElementById('content').innerHTML = '<div class="error">حدث خطأ أثناء تحميل السيرفرات.</div>';
                 });
         }
     </script>
@@ -294,21 +308,8 @@ def get_guilds():
             res = requests.get('https://discord.com/api/v10/users/@me/guilds', headers=headers)
             if res.status_code == 200:
                 for g in res.json():
-                    permissions = int(g.get('permissions', 0))
-                    # يفحص الصلاحيات التالية: 
-                    # Owner | Admin (0x8) | Manage Guild (0x20) | Manage Roles (0x10000000) | Manage Channels (0x10) | Kick Members (0x2) | Ban Members (0x4) | Mute Members (0x400000)
-                    has_permission = (
-                        g.get('owner') or 
-                        (permissions & 0x8) != 0 or 
-                        (permissions & 0x20) != 0 or 
-                        (permissions & 0x10000000) != 0 or 
-                        (permissions & 0x10) != 0 or 
-                        (permissions & 0x2) != 0 or
-                        (permissions & 0x4) != 0 or
-                        (permissions & 0x400000) != 0
-                    )
-                    if has_permission:
-                        guilds_list.append({"id": str(g['id']), "name": g['name']})
+                    # إظهار كل السيرفرات التي يتواجد فيها المستخدم ولديه فيها أي رتبة/صلاحية
+                    guilds_list.append({"id": str(g['id']), "name": g['name']})
         except Exception as e:
             print("Fetch guilds error:", e)
 
