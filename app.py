@@ -32,6 +32,7 @@ def save_config(data):
 
 def send_discord_alert(channel_id, tiktok_user):
     if not BOT_TOKEN:
+        print("[ERROR] BOT_TOKEN is missing in environment variables!")
         return False
     
     url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
@@ -48,8 +49,10 @@ def send_discord_alert(channel_id, tiktok_user):
     }
     try:
         res = requests.post(url, json=payload, headers=headers)
+        print(f"[DISCORD LOG] Status: {res.status_code}, Response: {res.text}")
         return res.status_code in [200, 201]
-    except Exception:
+    except Exception as e:
+        print(f"[DISCORD EXCEPTION] {e}")
         return False
 
 async def start_tiktok_listener(tiktok_user, channel_id):
@@ -57,12 +60,14 @@ async def start_tiktok_listener(tiktok_user, channel_id):
     
     @client.on(ConnectEvent)
     async def on_connect(event: ConnectEvent):
+        print(f"[TIKTOK LIVE] Connected successfully to @{tiktok_user}!")
         send_discord_alert(channel_id, tiktok_user)
 
     try:
+        print(f"[TIKTOK MONITOR] Starting listener for @{tiktok_user}...")
         await client.start()
     except Exception as e:
-        print(f"[TIKTOK ERROR] {tiktok_user}: {e}")
+        print(f"[TIKTOK ERROR] Monitor failed for @{tiktok_user}: {e}")
 
 def run_listener_in_thread(tiktok_user, channel_id):
     loop = asyncio.new_event_loop()
@@ -154,6 +159,13 @@ HTML_LAYOUT = """
             background: var(--tiktok-pink); color: #fff; padding: 14px 28px; border-radius: 10px;
             font-weight: bold; font-size: 1rem; width: 100%; border: none; cursor: pointer; margin-top: 10px; text-decoration: none;
         }
+
+        .btn-test {
+            background: transparent; color: var(--tiktok-cyan); border: 1px solid var(--tiktok-cyan);
+            padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 0.9rem; width: 100%;
+            cursor: pointer; margin-top: 10px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .btn-test:hover { background: rgba(37, 244, 238, 0.1); }
 
         .form-group { margin-bottom: 1.2rem; }
         .form-group label { display: block; margin-bottom: 6px; font-weight: bold; font-size: 0.95rem; }
@@ -264,11 +276,12 @@ HTML_LAYOUT = """
                                 <select id="guildSelect">`;
                         data.guilds.forEach(g => { html += `<option value="${g.id}">${g.name}</option>`; });
                         html += `</select></div>
-                            <div style="text-align: center; margin: 10px 0;"><span class="status-badge"><i class="fa-solid fa-bolt"></i> التنبيه المخفي تلقائي وشغال 100% 🔥</span></div>
+                            <div style="text-align: center; margin: 10px 0;"><span class="status-badge"><i class="fa-solid fa-bolt"></i> المراقبة التلقائية تعمل في الخلفية 🔥</span></div>
                             <div class="form-group"><label>يوزر التيك توك (TikTok Username):</label><input type="text" id="tiktokUser" placeholder="مثال: 2vce4"></div>
                             <div class="form-group"><label>رقم/آيدي روم التنبيهات (Channel ID):</label><input type="text" id="channelId" placeholder="مثال: 1538986763622813766"></div>
                             
                             <button onclick="saveSettings()" class="btn-tiktok"><i class="fa-solid fa-floppy-disk"></i> حفظ وتفعيل التنبيه الآلي</button>
+                            <button onclick="testNotification()" class="btn-test"><i class="fa-solid fa-paper-plane"></i> اختبار إرسال تنبيه تجريبي الآن</button>
 
                             <div id="responseMsg"></div>`;
                         document.getElementById('content').innerHTML = html;
@@ -297,8 +310,34 @@ HTML_LAYOUT = """
             .then(res => res.json())
             .then(data => {
                 if(data.success) {
-                    msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-circle-check"></i> تم الحفظ! المراقبة التلقائية تعمل في الخلفية الآن.</div>';
-                    setTimeout(() => location.reload(), 1200);
+                    msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-circle-check"></i> تم الحفظ وتفعيل الاستماع التلقائي!</div>';
+                }
+            });
+        }
+
+        function testNotification() {
+            const tiktokUser = document.getElementById('tiktokUser').value.trim();
+            const channelId = document.getElementById('channelId').value.trim();
+            const msgDiv = document.getElementById('responseMsg');
+
+            if (!tiktokUser || !channelId) {
+                msgDiv.innerHTML = '<div class="error">يرجى ادخال اليوزر ورقم الروم للاختبار.</div>';
+                return;
+            }
+
+            msgDiv.innerHTML = '<div style="color:var(--text-muted); text-align:center; margin-top:10px;">جاري اختبار الإرسال...</div>';
+
+            fetch('/api/test-alert', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tiktok_user: tiktokUser, channel_id: channelId })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-check-double"></i> تم إرسال التنبيه التجريبي إلى الديسكورد بنجاح!</div>';
+                } else {
+                    msgDiv.innerHTML = '<div class="error"><i class="fa-solid fa-triangle-exclamation"></i> فشل الإرسال! تأكد من توكن البوت وصلاحياته داخل الروم.</div>';
                 }
             });
         }
@@ -403,6 +442,15 @@ def save_settings():
         active_monitors[guild_id] = t
 
     return jsonify({"success": True})
+
+@app.route('/api/test-alert', methods=['POST'])
+def test_alert():
+    data = request.json
+    tiktok_user = data.get('tiktok_user', '').replace('@', '').strip()
+    channel_id = data.get('channel_id', '').strip()
+
+    success = send_discord_alert(channel_id, tiktok_user)
+    return jsonify({"success": success})
 
 if __name__ == '__main__':
     restart_all_listeners()
