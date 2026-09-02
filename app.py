@@ -53,16 +53,12 @@ def get_guilds():
     user_token = request.args.get('token')
     guilds_list = []
 
-    # 1. جلب كافة سيرفرات المستخدم التي يملك فيها رتبة أو صلاحيات إدارية
-    if user_token and user_token != 'demo':
+    if user_token and user_token != 'demo' and user_token != 'null':
         headers = {'Authorization': f'Bearer {user_token}'}
         res = requests.get('https://discord.com/api/v10/users/@me/guilds', headers=headers)
         if res.status_code == 200:
             for g in res.json():
                 permissions = int(g.get('permissions', 0))
-                
-                # فحص شامل لكافة الصلاحيات الإدارية في الديسكورد:
-                # Owner | Administrator (0x8) | Manage Server (0x20) | Manage Roles (0x10000000) | Manage Channels (0x10) | Manage Webhooks (0x20000000) | Manage Messages (0x2000)
                 has_permission = (
                     g.get('owner') or 
                     (permissions & 0x8) != 0 or 
@@ -72,11 +68,9 @@ def get_guilds():
                     (permissions & 0x20000000) != 0 or
                     (permissions & 0x2000) != 0
                 )
-                
                 if has_permission:
                     guilds_list.append({"id": str(g['id']), "name": g['name']})
 
-    # 2. في حال لم يُرجع حسابك أي سيرفر أو لم يتم تسجيل الدخول، يتم عرض سيرفرات البوت بأسمائها الحقيقية
     if not guilds_list:
         try:
             from main_bot import bot
