@@ -4,7 +4,6 @@ from flask import Flask, request, jsonify, redirect, render_template_string
 
 app = Flask(__name__)
 
-# تعديل أسماء المتغيرات لتطابق الموجود في Render تماماً
 DISCORD_CLIENT_ID = os.getenv("CLIENT_ID", os.getenv("DISCORD_CLIENT_ID", "1544289467853045861")).strip()
 DISCORD_CLIENT_SECRET = os.getenv("CLIENT_SECRET", os.getenv("DISCORD_CLIENT_SECRET", "")).strip()
 
@@ -229,23 +228,23 @@ HTML_LAYOUT = """
         const err = urlParams.get('err');
 
         if (err) {
-            document.getElementById('content').innerHTML += `<div class="error">خطأ في التسجيل (${err}): يرجى التأكد من الـ Client Secret في Render.</div>`;
+            document.getElementById('content').innerHTML += `<div class="error">خطأ في التسجيل (${err})</div>`;
         }
 
         if (token) {
-            document.getElementById('content').innerHTML = '<p style="color:var(--tiktok-cyan);"><i class="fa-solid fa-spinner fa-spin"></i> جاري تحميل جميع السيرفرات...</p>';
+            document.getElementById('content').innerHTML = '<p style="color:var(--tiktok-cyan);"><i class="fa-solid fa-spinner fa-spin"></i> جاري جلب السيرفرات التي تملك فيها رتبة...</p>';
             fetch('/api/guilds?token=' + token)
                 .then(res => res.json())
                 .then(data => {
                     if (data.guilds && data.guilds.length > 0) {
-                        let html = '<label style="display:block; text-align:right; margin-bottom:8px; font-weight:bold;">اختر السيرفر:</label><select id="guildSelect">';
+                        let html = '<label style="display:block; text-align:right; margin-bottom:8px; font-weight:bold;">اختر السيرفر اللي فيه رتبتك:</label><select id="guildSelect">';
                         data.guilds.forEach(g => {
                             html += `<option value="${g.id}">${g.name}</option>`;
                         });
                         html += '</select>';
                         document.getElementById('content').innerHTML = html;
                     } else {
-                        document.getElementById('content').innerHTML = '<p>لم يتم العثور على سيرفرات.</p>';
+                        document.getElementById('content').innerHTML = '<p>لم يتم العثور على سيرفرات تملك فيها رتبة أو صلاحيات إدارية.</p>';
                     }
                 })
                 .catch(err => {
@@ -309,7 +308,21 @@ def get_guilds():
             res = requests.get('https://discord.com/api/v10/users/@me/guilds', headers=headers)
             if res.status_code == 200:
                 for g in res.json():
-                    guilds_list.append({"id": str(g['id']), "name": g['name']})
+                    permissions = int(g.get('permissions', 0))
+                    # يفحص إذا كان مالك السيرفر أو يمتلك أي صلاحية إدارية/إشرافية (مثل إدارة السيرفر، الرتب، القنوات، طرد/حظر، أو الميوت)
+                    has_role_permission = (
+                        g.get('owner') or 
+                        (permissions & 0x8) != 0 or         # Administrator
+                        (permissions & 0x20) != 0 or        # Manage Guild
+                        (permissions & 0x10000000) != 0 or  # Manage Roles
+                        (permissions & 0x10) != 0 or        # Manage Channels
+                        (permissions & 0x2) != 0 or         # Kick Members
+                        (permissions & 0x4) != 0 or         # Ban Members
+                        (permissions & 0x400000) != 0 or    # Mute Members
+                        (permissions & 0x2000) != 0         # Manage Messages
+                    )
+                    if has_role_permission:
+                        guilds_list.append({"id": str(g['id']), "name": g['name']})
         except Exception as e:
             print("Fetch guilds error:", e)
 
