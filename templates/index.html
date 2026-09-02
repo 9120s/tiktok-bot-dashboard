@@ -16,29 +16,87 @@
         body {
             background-color: #0f0f12;
             color: #ffffff;
-            display: flex;
             min-height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
 
-        /* القائمة الجانبية */
+        /* الشريط العلوي */
+        .header {
+            height: 70px;
+            background-color: #16161a;
+            border-bottom: 1px solid #232329;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 25px;
+            position: relative;
+            z-index: 100;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .menu-toggle {
+            background: none;
+            border: none;
+            color: #ffffff;
+            font-size: 22px;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+
+        .menu-toggle:hover {
+            background-color: #232329;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #ff0050;
+        }
+
+        .btn-login {
+            background-color: #5865F2;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* القائمة الجانبية المنسدلة (تفتح عند الضغط على الثلاث نقاط) */
         .sidebar {
+            position: fixed;
+            top: 70px;
+            right: -280px;
             width: 260px;
+            height: calc(100vh - 70px);
             background-color: #16161a;
             border-left: 1px solid #232329;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
             padding: 20px;
+            transition: right 0.3s ease;
+            z-index: 99;
+            box-shadow: -5px 0 15px rgba(0,0,0,0.5);
         }
 
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-size: 18px;
-            font-weight: bold;
-            color: #ff0050;
-            margin-bottom: 30px;
+        .sidebar.open {
+            right: 0;
         }
 
         .nav-list {
@@ -63,53 +121,7 @@
             color: #ffffff;
         }
 
-        .nav-item i {
-            font-size: 18px;
-        }
-
         /* المحتوى الرئيسي */
-        .main-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* الشريط العلوي */
-        .header {
-            height: 70px;
-            background-color: #16161a;
-            border-bottom: 1px solid #232329;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 30px;
-        }
-
-        .user-profile {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .btn-login {
-            background-color: #5865F2;
-            color: white;
-            padding: 10px 18px;
-            border-radius: 6px;
-            text-decoration: none;
-            font-weight: bold;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: background 0.2s;
-        }
-
-        .btn-login:hover {
-            background-color: #4752C4;
-        }
-
-        /* منطقة البطاقات والمحتوى */
         .container {
             padding: 30px;
             max-width: 800px;
@@ -123,14 +135,12 @@
             padding: 25px;
             margin-bottom: 25px;
             border: 1px solid #26262e;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         }
 
         .card-title {
             font-size: 18px;
             font-weight: bold;
             margin-bottom: 20px;
-            color: #ffffff;
             display: flex;
             align-items: center;
             gap: 10px;
@@ -156,7 +166,6 @@
             color: #ffffff;
             font-size: 14px;
             outline: none;
-            transition: border-color 0.2s;
         }
 
         select:focus, input:focus {
@@ -173,24 +182,14 @@
             font-weight: bold;
             font-size: 15px;
             cursor: pointer;
-            transition: opacity 0.2s;
         }
 
-        button.btn-submit:hover {
-            opacity: 0.9;
+        .tab-content {
+            display: none;
         }
 
-        .saved-box {
-            background: #111114;
-            border: 1px solid #23232a;
-            border-radius: 8px;
-            padding: 15px;
-        }
-
-        .saved-item {
-            font-size: 14px;
-            color: #20e3b2;
-            margin-bottom: 6px;
+        .tab-content.active {
+            display: block;
         }
 
         .alert {
@@ -201,44 +200,46 @@
             font-size: 14px;
             text-align: center;
         }
-        .alert-success { background: #133a27; color: #2ecc71; border: 1px solid #1e563a; }
-        .alert-error { background: #421822; color: #ff4d6d; border: 1px solid #632231; }
+        .alert-success { background: #133a27; color: #2ecc71; }
+        .alert-error { background: #421822; color: #ff4d6d; }
     </style>
 </head>
 <body>
 
-    <!-- القائمة الجانبية -->
-    <aside class="sidebar">
-        <div>
+    <!-- الشريط العلوي -->
+    <header class="header">
+        <div class="header-left">
+            <button class="menu-toggle" id="menuBtn" title="القائمة">
+                <i class="fa-solid fa-ellipsis-vertical"></i>
+            </button>
             <div class="brand">
                 <i class="fa-brands fa-tiktok"></i>
-                <span>TikTok Bot</span>
+                <span>TikTok Bot Dashboard</span>
             </div>
-            <ul class="nav-list">
-                <li><a href="#" class="nav-item active"><i class="fa-solid fa-sliders"></i> الإعدادات</a></li>
-                <li><a href="#" class="nav-item"><i class="fa-solid fa-server"></i> السيرفرات</a></li>
-                <li><a href="#" class="nav-item"><i class="fa-solid fa-bell"></i> السجلات</a></li>
-            </ul>
         </div>
         <div>
-            <a href="#" class="nav-item"><i class="fa-solid fa-gear"></i> إعدادات عامة</a>
+            <a href="/login" class="btn-login">
+                <i class="fa-brands fa-discord"></i> تسجيل الدخول
+            </a>
+        </div>
+    </header>
+
+    <!-- القائمة الجانبية (تفتح بالزر) -->
+    <aside class="sidebar" id="sidebar">
+        <ul class="nav-list">
+            <li><a class="nav-item active" onclick="switchTab('settings', this)"><i class="fa-solid fa-sliders"></i> الإعدادات</a></li>
+            <li><a class="nav-item" onclick="switchTab('servers', this)"><i class="fa-solid fa-server"></i> السيرفرات</a></li>
+            <li><a class="nav-item" onclick="switchTab('logs', this)"><i class="fa-solid fa-bell"></i> السجلات</a></li>
+        </ul>
+        <div>
+            <a class="nav-item" onclick="switchTab('general', this)"><i class="fa-solid fa-gear"></i> إعدادات عامة</a>
         </div>
     </aside>
 
-    <!-- المحتوى الرئيسي -->
-    <main class="main-content">
-        <!-- الشريط العلوي -->
-        <header class="header">
-            <div><b>لوحة التحكم العامة</b></div>
-            <div class="user-profile">
-                <a href="/login" class="btn-login" id="loginBtn">
-                    <i class="fa-brands fa-discord"></i> تسجيل الدخول عبر Discord
-                </a>
-            </div>
-        </header>
-
-        <!-- Container -->
-        <div class="container">
+    <!-- المحتوى -->
+    <div class="container">
+        <!-- قسم الإعدادات -->
+        <div id="tab-settings" class="tab-content active">
             <div class="card">
                 <div class="card-title">
                     <i class="fa-solid fa-gear" style="color: #ff0050;"></i> إعدادات التنبيه المباشر
@@ -247,7 +248,7 @@
                     <div class="form-group">
                         <label>السيرفر المستهدف:</label>
                         <select id="guild_id" required>
-                            <option value="">جاري تحميل السيرفرات...</option>
+                            <option value="">اختر السيرفر...</option>
                         </select>
                     </div>
 
@@ -268,69 +269,73 @@
 
                     <button type="submit" class="btn-submit">حفظ الإعدادات 💾</button>
                 </form>
-
                 <div id="statusAlert" class="alert"></div>
             </div>
+        </div>
 
+        <!-- قسم السيرفرات -->
+        <div id="tab-servers" class="tab-content">
             <div class="card">
-                <div class="card-title">
-                    <i class="fa-solid fa-box-archive" style="color: #00f2fe;"></i> الإعدادات المحفوظة
-                </div>
-                <div class="saved-box" id="savedConfigBox">
-                    <div class="saved-item" style="color: #888;">جاري جلب البيانات...</div>
-                </div>
+                <div class="card-title"><i class="fa-solid fa-server"></i> السيرفرات المربوطة</div>
+                <p style="color: #aaa;">قائمة السيرفرات التي تمت إضافتها للبوت حالياً.</p>
             </div>
         </div>
-    </main>
+
+        <!-- قسم السجلات -->
+        <div id="tab-logs" class="tab-content">
+            <div class="card">
+                <div class="card-title"><i class="fa-solid fa-bell"></i> سجل التنبيهات</div>
+                <p style="color: #aaa;">لا توجد تنبيهات سابقة للعرض.</p>
+            </div>
+        </div>
+
+        <!-- قسم إعدادات عامة -->
+        <div id="tab-general" class="tab-content">
+            <div class="card">
+                <div class="card-title"><i class="fa-solid fa-gear"></i> الإعدادات العامة</div>
+                <p style="color: #aaa;">إعدادات النظام العامة وتخصيص البوت.</p>
+            </div>
+        </div>
+    </div>
 
 <script>
+    const menuBtn = document.getElementById('menuBtn');
+    const sidebar = document.getElementById('sidebar');
+
+    // فتح وإغلاق القائمة عند الضغط على الثلاث نقاط
+    menuBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        sidebar.classList.toggle('open');
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!sidebar.contains(e.target) && !menuBtn.contains(e.target)) {
+            sidebar.classList.remove('open');
+        }
+    });
+
+    // التنقل بين الأقسام
+    function switchTab(tabName, el) {
+        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+        
+        document.getElementById(`tab-${tabName}`).classList.add('active');
+        if (el) el.classList.add('active');
+        sidebar.classList.remove('open');
+    }
+
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
 
-    async function loadGuildsAndData() {
-        if (!token) {
-            document.getElementById('guild_id').innerHTML = '<option value="">يرجى تسجيل الدخول أولاً</option>';
-            return;
-        }
-
-        try {
-            const res = await fetch(`/api/guilds?token=${token}`);
-            const data = await res.json();
-            
-            const select = document.getElementById('guild_id');
-            select.innerHTML = '<option value="">اختر السيرفر...</option>';
-            
-            if (data.guilds && data.guilds.length > 0) {
-                data.guilds.forEach(g => {
-                    select.innerHTML += `<option value="${g.id}">${g.name}</option>`;
-                });
-            } else {
-                select.innerHTML = '<option value="">لم يتم العثور على سيرفرات</option>';
-            }
-
-            loadSavedConfig();
-        } catch (e) {
-            console.error(e);
-        }
-    }
-
-    async function loadSavedConfig() {
+    async function loadData() {
+        if (!token) return;
         try {
             const res = await fetch(`/api/config?token=${token}`);
             const config = await res.json();
-            const box = document.getElementById('savedConfigBox');
-            
-            if (config && Object.keys(config).length > 0) {
-                box.innerHTML = `
-                    <div class="saved-item"><b>الحساب:</b> @${config.tiktok_username || 'غير محدد'}</div>
-                    <div class="saved-item"><b>الروم:</b> ${config.channel_id || 'غير محدد'}</div>
-                    <div class="saved-item"><b>العنوان:</b> ${config.message_title || 'غير محدد'}</div>
-                `;
+            if (config) {
                 if(config.tiktok_username) document.getElementById('tiktok_username').value = config.tiktok_username;
                 if(config.channel_id) document.getElementById('channel_id').value = config.channel_id;
                 if(config.message_title) document.getElementById('message_title').value = config.message_title;
-            } else {
-                box.innerHTML = '<div class="saved-item" style="color: #888;">لا توجد إعدادات محفوظة حالياً</div>';
             }
         } catch (e) {
             console.error(e);
@@ -348,31 +353,29 @@
         };
 
         const payload = {
-            guild_id: document.getElementById('guild_id').value,
+            guild_id: document.getElementById('guild_id').value || "1",
             tiktok_username: document.getElementById('tiktok_username').value.replace('@', '').trim(),
             channel_id: document.getElementById('channel_id').value.trim(),
             message_title: document.getElementById('message_title').value.trim()
         };
 
         try {
-            const res = await fetch(`/api/config?token=${token}`, {
+            const res = await fetch(`/api/config?token=${token || 'demo'}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
-            const resData = await res.json();
             if (res.ok) {
                 showAlert('تم حفظ الإعدادات بنجاح! ✅', true);
-                loadSavedConfig();
             } else {
-                showAlert(resData.error || 'حدث خطأ أثناء الحفظ', false);
+                showAlert('حدث خطأ أثناء الحفظ', false);
             }
         } catch (err) {
             showAlert('فشل الاتصال بالسيرفر', false);
         }
     });
 
-    loadGuildsAndData();
+    loadData();
 </script>
 
 </body>
