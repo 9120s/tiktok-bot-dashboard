@@ -15,13 +15,17 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 app.secret_key = os.environ.get("SECRET_KEY", "mysecretkey12345")
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+app.config['SESSION_COOKIE_SAMESITE'] = 'None'
 app.config['SESSION_COOKIE_SECURE'] = True
 
 CLIENT_ID = os.environ.get("CLIENT_ID") or os.environ.get("DISCORD_CLIENT_ID", "")
 CLIENT_SECRET = os.environ.get("CLIENT_SECRET") or os.environ.get("DISCORD_CLIENT_SECRET", "")
 REDIRECT_URI = os.environ.get("REDIRECT_URI") or os.environ.get("DISCORD_REDIRECT_URI", "")
 BOT_TOKEN = os.environ.get("BOT_TOKEN") or os.environ.get("DISCORD_BOT_TOKEN", "")
+
+# رابط سيرفر الديسكورد الخاص بك
+DISCORD_SERVER_INVITE = "https://discord.gg/TQUFzyxM7"
 
 API_BASE_URL = "https://discord.com/api/v10"
 CONFIG_FILE = "guilds_config.json"
@@ -64,7 +68,7 @@ def run_bot():
         print("Error: BOT_TOKEN is missing!")
 
 # --------------------------------------------------
-# 3. لوحة التحكم بتصميم القائمة الجانبية المتقدم
+# 3. لوحة التحكم بتصميم القائمة الجانبية
 # --------------------------------------------------
 
 DASHBOARD_HTML = """
@@ -84,12 +88,12 @@ DASHBOARD_HTML = """
             --text-color: #ffffff;
             --text-muted: #a0a5b5;
             --border-color: #262833;
+            --discord-color: #5865F2;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background-color: var(--bg-color); color: var(--text-color); min-height: 100vh; overflow-x: hidden; }
 
-        /* Navbar Header */
         .navbar {
             display: flex;
             justify-content: space-between;
@@ -113,7 +117,6 @@ DASHBOARD_HTML = """
         .brand { font-size: 20px; font-weight: bold; display: flex; align-items: center; gap: 10px; }
         .brand i { color: var(--accent-color); }
 
-        /* Sidebar Navigation */
         .sidebar {
             position: fixed;
             top: 0;
@@ -143,7 +146,7 @@ DASHBOARD_HTML = """
         .close-btn { background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; }
         .close-btn:hover { color: var(--text-color); }
 
-        .nav-links { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+        .nav-links { list-style: none; display: flex; flex-direction: column; gap: 10px; height: 100%; }
         .nav-links li a {
             display: flex;
             align-items: center;
@@ -160,6 +163,27 @@ DASHBOARD_HTML = """
             color: var(--accent-color);
         }
 
+        .sidebar-footer {
+            margin-top: auto;
+            border-top: 1px solid var(--border-color);
+            padding-top: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .discord-btn-link {
+            background-color: rgba(88, 101, 242, 0.15) !important;
+            color: #7983f5 !important;
+            border: 1px solid rgba(88, 101, 242, 0.4);
+            font-weight: bold;
+        }
+
+        .discord-btn-link:hover {
+            background-color: var(--discord-color) !important;
+            color: white !important;
+        }
+
         .overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -169,7 +193,6 @@ DASHBOARD_HTML = """
         }
         .overlay.active { display: block; }
 
-        /* Main Content Grid */
         .container { max-width: 900px; margin: 40px auto; padding: 0 20px; }
         .card {
             background-color: var(--card-bg);
@@ -212,7 +235,7 @@ DASHBOARD_HTML = """
             display: inline-flex;
             align-items: center;
             gap: 10px;
-            background-color: #5865F2;
+            background-color: var(--discord-color);
             color: white;
             padding: 12px 24px;
             border-radius: 8px;
@@ -226,7 +249,6 @@ DASHBOARD_HTML = """
 </head>
 <body>
 
-    <!-- Header Navbar -->
     <div class="navbar">
         <button class="menu-btn" onclick="toggleMenu()"><i class="fa-solid fa-bars"></i></button>
         <div class="brand"><i class="fa-brands fa-tiktok"></i> TikTok Bot Dashboard</div>
@@ -237,10 +259,9 @@ DASHBOARD_HTML = """
         </div>
     </div>
 
-    <!-- Overlay -->
     <div class="overlay" id="overlay" onclick="toggleMenu()"></div>
 
-    <!-- Sidebar Navigation -->
+    <!-- Sidebar -->
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
             <h3>القائمة الرئيسية</h3>
@@ -249,13 +270,21 @@ DASHBOARD_HTML = """
         <ul class="nav-links">
             <li><a href="#" class="active" onclick="switchTab('settings')"><i class="fa-solid fa-gear"></i> الإعدادات العامة</a></li>
             <li><a href="#" onclick="switchTab('top3')"><i class="fa-solid fa-trophy"></i> أفضل ثوالث (Top Streamers)</a></li>
-            {% if logged_in %}
-                <li style="margin-top: auto;"><a href="/logout" style="color: #ff4757;"><i class="fa-solid fa-right-from-bracket"></i> تسجيل الخروج</a></li>
-            {% endif %}
+            
+            <!-- الجزء السفلي: الخط الفاصل، زر الديسكورد، وزر الخروج -->
+            <div class="sidebar-footer">
+                <li>
+                    <a href="{{ server_invite }}" target="_blank" class="discord-btn-link">
+                        <i class="fa-brands fa-discord"></i> انضم لسيرفرنا
+                    </a>
+                </li>
+                {% if logged_in %}
+                    <li><a href="/logout" style="color: #ff4757;"><i class="fa-solid fa-right-from-bracket"></i> تسجيل الخروج</a></li>
+                {% endif %}
+            </div>
         </ul>
     </div>
 
-    <!-- Main Body Container -->
     <div class="container">
         {% if not logged_in %}
             <div class="card" style="text-align: center; padding: 50px;">
@@ -264,7 +293,6 @@ DASHBOARD_HTML = """
                 <a class="btn-login" href="/login"><i class="fa-brands fa-discord"></i> دخول بحساب Discord</a>
             </div>
         {% else %}
-            <!-- Tab 1: Settings -->
             <div id="settings" class="tab-content active">
                 <div class="card">
                     <h2 style="margin-bottom: 20px;"><i class="fa-solid fa-sliders"></i> إعدادات التنبيهات</h2>
@@ -293,7 +321,6 @@ DASHBOARD_HTML = """
                 </div>
             </div>
 
-            <!-- Tab 2: Top 3 Streamers -->
             <div id="top3" class="tab-content">
                 <div class="card">
                     <h2 style="margin-bottom: 20px;"><i class="fa-solid fa-trophy" style="color: gold;"></i> قائمة أفضل ثوالث</h2>
@@ -330,7 +357,7 @@ def home():
     logged_in = 'user' in session
     user = session.get('user', None)
     guilds = session.get('guilds', [])
-    return render_template_string(DASHBOARD_HTML, logged_in=logged_in, user=user, guilds=guilds)
+    return render_template_string(DASHBOARD_HTML, logged_in=logged_in, user=user, guilds=guilds, server_invite=DISCORD_SERVER_INVITE)
 
 @app.route('/login')
 def login():
@@ -341,7 +368,7 @@ def login():
 def callback():
     code = request.args.get('code')
     if not code:
-        return "لم يتم استلام كود التوثيق من ديسكورد", 400
+        return redirect('/login')
 
     data = {
         'client_id': CLIENT_ID,
@@ -358,7 +385,7 @@ def callback():
         access_token = token_data.get('access_token')
 
         if not access_token:
-            return f"<h3>فشل الحصول على التوكين</h3><p>رد ديسكورد: {token_data}</p>", 400
+            return redirect('/login')
 
         user_headers = {'Authorization': f"Bearer {access_token}"}
         user_data = requests.get(f"{API_BASE_URL}/users/@me", headers=user_headers).json()
@@ -375,8 +402,8 @@ def callback():
         session['guilds'] = filtered_guilds
         return redirect('/')
 
-    except Exception as e:
-        return f"<h3>حدث خطأ في السيرفر:</h3><p>{e}</p>", 500
+    except Exception:
+        return redirect('/login')
 
 @app.route('/save-settings', methods=['POST'])
 def save_settings():
@@ -403,7 +430,7 @@ def logout():
     return redirect('/')
 
 # --------------------------------------------------
-# 4. تشغيل البوت واللوحة معاً
+# 4. تشغيل السيرفر والبوت
 # --------------------------------------------------
 
 if __name__ == '__main__':
