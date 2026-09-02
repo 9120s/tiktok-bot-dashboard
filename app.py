@@ -1,16 +1,70 @@
 import os
 import requests
-from flask import Flask, render_template, request, jsonify, redirect
+from flask import Flask, request, jsonify, redirect, render_template_string
 
-app = Flask(__name__, template_folder='templates')
+app = Flask(__name__)
 
 DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID", "1544289467853045861")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
 REDIRECT_URI = os.getenv("REDIRECT_URI", "")
 
+# واجهة HTML مدمجة ومباشرة لمنع الشاشة البيضاء نهائياً
+HTML_LAYOUT = """
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة تحكم البوت</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #0f172a; color: #fff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+        .card { background: #1e293b; padding: 2rem; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); width: 90%; max-width: 450px; text-align: center; }
+        h2 { margin-bottom: 1.5rem; color: #38bdf8; }
+        .btn { display: inline-block; background: #5865F2; color: #fff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; transition: 0.2s; border: none; cursor: pointer; width: 100%; box-sizing: border-box; }
+        .btn:hover { background: #4752C4; }
+        select { width: 100%; padding: 10px; margin-top: 15px; border-radius: 6px; border: 1px solid #334155; background: #0f172a; color: #fff; font-size: 1rem; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>لوحة تحكم البوت</h2>
+        <div id="content">
+            <a href="/login" class="btn">تسجيل الدخول عبر ديسكورد</a>
+        </div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+
+        if (token) {
+            document.getElementById('content').innerHTML = '<p>جاري تحميل السيرفرات...</p>';
+            fetch('/api/guilds?token=' + token)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.guilds && data.guilds.length > 0) {
+                        let html = '<label>اختر السيرفر:</label><select id="guildSelect">';
+                        data.guilds.forEach(g => {
+                            html += `<option value="${g.id}">${g.name}</option>`;
+                        });
+                        html += '</select>';
+                        document.getElementById('content').innerHTML = html;
+                    } else {
+                        document.getElementById('content').innerHTML = '<p>لم يتم العثور على سيرفرات تمتلك فيها صلاحيات إدارية.</p>';
+                    }
+                })
+                .catch(err => {
+                    document.getElementById('content').innerHTML = '<p>حدث خطأ أثناء جلب السيرفرات.</p>';
+                });
+        }
+    </script>
+</body>
+</html>
+"""
+
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template_string(HTML_LAYOUT)
 
 @app.route('/login')
 def login():
