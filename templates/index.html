@@ -39,6 +39,12 @@
             gap: 15px;
         }
 
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
         .menu-toggle {
             background: none;
             border: none;
@@ -61,6 +67,26 @@
             font-size: 18px;
             font-weight: bold;
             color: #ff0050;
+        }
+
+        .btn-join-server {
+            background-color: #24242c;
+            color: #5865F2;
+            border: 1px solid #5865F2;
+            padding: 8px 16px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+        .btn-join-server:hover {
+            background-color: #5865F2;
+            color: white;
         }
 
         .btn-login {
@@ -218,10 +244,17 @@
                 <span>TikTok Bot Dashboard</span>
             </div>
         </div>
-        <div id="authContainer">
-            <a href="https://discord.com/oauth2/authorize?client_id=1544289467853045861&response_type=code&redirect_uri=https%3A%2F%2Ftiktok-bot-2s2-dashboard.onrender.com%2Fcallback&scope=identify+guilds" class="btn-login">
-                <i class="fa-brands fa-discord"></i> تسجيل الدخول
+        <div class="header-right">
+            <!-- زر الانضمام لسيرفر الديسكورد -->
+            <a href="https://discord.gg/VzWTX4rDWY" target="_blank" class="btn-join-server">
+                <i class="fa-brands fa-discord"></i> انضمام للسيرفر
             </a>
+            
+            <div id="authContainer">
+                <a href="https://discord.com/oauth2/authorize?client_id=1544289467853045861&response_type=code&redirect_uri=https%3A%2F%2Ftiktok-bot-2s2-dashboard.onrender.com%2Fcallback&scope=identify+guilds" class="btn-login">
+                    <i class="fa-solid fa-right-to-bracket"></i> تسجيل الدخول
+                </a>
+            </div>
         </div>
     </header>
 
@@ -232,6 +265,10 @@
             <li><a class="nav-item" onclick="switchTab('logs', this)"><i class="fa-solid fa-bell"></i> السجلات</a></li>
         </ul>
         <div>
+            <!-- رابط سيرفر الديسكورد في القائمة الجانبية -->
+            <a href="https://discord.gg/VzWTX4rDWY" target="_blank" class="nav-item" style="color: #5865F2;">
+                <i class="fa-brands fa-discord"></i> سيرفر الديسكورد
+            </a>
             <a class="nav-item" onclick="switchTab('general', this)"><i class="fa-solid fa-gear"></i> إعدادات عامة</a>
         </div>
     </aside>
@@ -336,7 +373,6 @@
         `;
     }
 
-    // جلب قائمة السيرفرات
     async function loadGuilds() {
         const activeToken = currentToken || 'demo';
         const guildSelect = document.getElementById('guild_id');
@@ -359,8 +395,8 @@
                     serversList.innerHTML += `<div style="padding: 10px; background: #222; margin-bottom: 8px; border-radius: 6px;">🔹 ${g.name} (ID: ${g.id})</div>`;
                 });
             } else {
-                guildSelect.innerHTML = '<option value="1">السيرفر الافتراضي (Default Server)</option>';
-                serversList.innerHTML = '<p style="color: #aaa;">لم يتم العثور على سيرفرات مرتبطة بالبوت.</p>';
+                guildSelect.innerHTML = '<option value="1">السيرفر الافتراضي</option>';
+                serversList.innerHTML = '<p style="color: #aaa;">لم يتم العثور على سيرفرات مرتبط بها البوت.</p>';
             }
         } catch (e) {
             console.error(e);
