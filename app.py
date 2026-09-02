@@ -13,6 +13,9 @@ DISCORD_CLIENT_ID = os.getenv("CLIENT_ID", os.getenv("DISCORD_CLIENT_ID", "15442
 DISCORD_CLIENT_SECRET = os.getenv("CLIENT_SECRET", os.getenv("DISCORD_CLIENT_SECRET", "")).strip()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 
+# ضع رابط دعوة سيرفر الديسكورد الخاص بك هنا أو في Environment Variables
+SERVER_INVITE_URL = os.getenv("SERVER_INVITE_URL", "https://discord.gg/YOUR_INVITE_CODE").strip()
+
 CONFIG_FILE = "config.json"
 active_monitors = {}
 
@@ -126,6 +129,13 @@ HTML_LAYOUT = """
         }
         .nav-item a:hover, .nav-item.active a { background: #27272a; color: var(--tiktok-cyan); }
 
+        .join-server-btn {
+            background: linear-gradient(45deg, var(--tiktok-pink), var(--tiktok-cyan));
+            color: #000 !important;
+            font-weight: 800 !important;
+            box-shadow: 0 4px 15px rgba(254, 44, 85, 0.4);
+        }
+
         .auth-btn { background: rgba(254, 44, 85, 0.15); color: var(--tiktok-pink) !important; border: 1px solid var(--tiktok-pink); margin-bottom: 8px; }
         .auth-btn:hover { background: var(--tiktok-pink) !important; color: #fff !important; }
 
@@ -175,6 +185,11 @@ HTML_LAYOUT = """
         <ul class="nav-menu">
             <li class="nav-item">
                 <a href="/login" class="auth-btn" id="authBtn"><i class="fa-solid fa-right-to-bracket"></i> تسجيل الدخول</a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ server_invite }}" target="_blank" class="join-server-btn">
+                    <i class="fa-brands fa-discord"></i> انضم لسيرفرنا
+                </a>
             </li>
         </ul>
     </aside>
@@ -277,15 +292,25 @@ HTML_LAYOUT = """
 </html>
 """
 
+def get_redirect_uri():
+    redirect_env = os.getenv("REDIRECT_URI", "").strip()
+    if redirect_env:
+        return redirect_env
+    # توليد الرابط مع التثبيت على HTTPS لإعادة التوجيه الصحيحة
+    base_url = request.host_url.rstrip('/')
+    if base_url.startswith("http://"):
+        base_url = base_url.replace("http://", "https://", 1)
+    return f"{base_url}/callback"
+
 # --- Routes ---
 
 @app.route('/')
 def index():
-    return render_template_string(HTML_LAYOUT)
+    return render_template_string(HTML_LAYOUT, server_invite=SERVER_INVITE_URL)
 
 @app.route('/login')
 def login():
-    redirect_uri = request.host_url.rstrip('/') + '/callback'
+    redirect_uri = get_redirect_uri()
     discord_auth_url = f"https://discord.com/oauth2/authorize?client_id={DISCORD_CLIENT_ID}&response_type=code&redirect_uri={redirect_uri}&scope=identify+guilds"
     return redirect(discord_auth_url)
 
@@ -294,14 +319,14 @@ def callback():
     code = request.args.get('code')
     if not code: return redirect('/?err=nocode')
     
-    redirect_uri = request.host_url.rstrip('/') + '/callback'
+    redirect_uri = get_redirect_uri()
     data = {'client_id': DISCORD_CLIENT_ID, 'client_secret': DISCORD_CLIENT_SECRET, 'grant_type': 'authorization_code', 'code': code, 'redirect_uri': redirect_uri}
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
     
     res = requests.post('https://discord.com/api/v10/oauth2/token', data=data, headers=headers)
     if res.status_code == 200:
         return redirect(f"/?token={res.json().get('access_token')}")
-    return redirect('/?err=auth_failed')
+    return redirect(f'/?err=auth_failed_{res.status_code}')
 
 @app.route('/api/guilds')
 def get_guilds():
