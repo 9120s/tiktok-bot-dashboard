@@ -1,11 +1,10 @@
 import os
-import asyncio
+import time
 import threading
 import requests
 import discord
 from discord.ext import commands
 from flask import Flask, request, jsonify, redirect, render_template_string
-from TikTokLive import TikTokLiveClient
 
 app = Flask(__name__)
 
@@ -15,7 +14,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 SERVER_INVITE_URL = os.getenv("SERVER_INVITE_URL", "https://discord.gg/TQUFzyxM7").strip()
 
 SAVED_CONFIGS = {}
-active_monitors = {}
+LIVE_STATUS = {}  # لمتابعة حالة البث لكل حساب
 
 # --- إعداد بوت ديسكورد للبقاء أونلاين (Online 24/7) ---
 intents = discord.Intents.default()
@@ -32,7 +31,6 @@ def run_discord_bot():
         except Exception as e:
             print(f"[DISCORD BOT ERROR] {e}")
 
-# تشغيل اتصالات البوت في خلفية التطبيق
 threading.Thread(target=run_discord_bot, daemon=True).start()
 
 # --- إرسال الإشعارات عبر API ---
@@ -47,15 +45,17 @@ def send_discord_alert(channel_id, tiktok_user, is_test=False):
         "Content-Type": "application/json"
     }
     
-    desc = f"بدأ **@{tiktok_user}** بث جديد على تيك توك الآن! 🔥\n\n[اضغط هنا لمشاهدة البث مباشرة](https://www.tiktok.com/@{tiktok_user}/live)"
+    desc = f"معاً الآن في بث مباشر على TikTok! 🔴\n\n[اضغط هنا للإنضمام للبث](https://www.tiktok.com/@{tiktok_user}/live)"
     if is_test:
         desc = f"⚙️ **تم الربط بنجاح!**\nحساب **@{tiktok_user}** متصل الآن بالمراقبة التلقائية وسيرسل إشعارات البث فور بدئها."
 
     payload = {
+        "content": "@everyone معاً بدأ بث جديد حياكم" if not is_test else "",
         "embeds": [{
-            "title": "🔴 بث جديد مباشر الان!" if not is_test else "✅ تم تفعيل التنبيهات بنجاح",
+            "title": f"TikTok Live - {tiktok_user}",
             "description": desc,
-            "color": 16657493 if not is_test else 4898432
+            "color": 16657493 if not is_test else 4898432,
+            "footer": {"text": "TikTok Live Notification"}
         }]
     }
     try:
@@ -65,29 +65,45 @@ def send_discord_alert(channel_id, tiktok_user, is_test=False):
         print(f"[DISCORD ERROR] {e}")
         return False
 
-async def start_tiktok_listener(tiktok_user, channel_id):
-    client = TikTokLiveClient(unique_id=tiktok_user)
-    is_live_now = False
+# --- فحص حالة البث بدون التعليق ---
+def check_tiktok_is_live(tiktok_user):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    url = f"https://www.tiktok.com/@{tiktok_user}/live"
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+        # إذا احتوت الصفحة على الكود المباشر يعتبر لايف
+        if '"liveRoom":' in res.text or '"status":2' in res.text or 'room_id' in res.url:
+            return True
+    except Exception as e:
+        print(f"[TIKTOK CHECK ERROR] {tiktok_user}: {e}")
+    return False
 
+def tiktok_monitor_loop():
     while True:
-        try:
-            is_connected = await client.is_live()
+        for guild_id, data in list(SAVED_CONFIGS.items()):
+            tiktok_user = data.get("tiktok_user")
+            channel_id = data.get("channel_id")
             
-            if is_connected and not is_live_now:
-                is_live_now = True
-                send_discord_alert(channel_id, tiktok_user)
-            elif not is_connected:
-                is_live_now = False
-                
-        except Exception as e:
-            print(f"[TIKTOK CHECK ERROR] {tiktok_user}: {e}")
-        
-        await asyncio.sleep(20)
+            if not tiktok_user or not channel_id:
+                continue
 
-def run_listener_in_thread(tiktok_user, channel_id):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(start_tiktok_listener(tiktok_user, channel_id))
+            is_live = check_tiktok_is_live(tiktok_user)
+            was_live = LIVE_STATUS.get(tiktok_user, False)
+
+            if is_live and not was_live:
+                LIVE_STATUS[tiktok_user] = True
+                send_discord_alert(channel_id, tiktok_user)
+                print(f"🔴 {tiktok_user} is LIVE! Notification sent.")
+            elif not is_live and was_live:
+                LIVE_STATUS[tiktok_user] = False
+                print(f"⚪ {tiktok_user} is OFFLINE.")
+
+        time.sleep(30)
+
+# تشغيل حلقة فحص التيك توك في الخلفية
+threading.Thread(target=tiktok_monitor_loop, daemon=True).start()
 
 # --- HTML Layout ---
 
@@ -411,11 +427,8 @@ def save_settings():
 
     SAVED_CONFIGS[guild_id] = {"tiktok_user": tiktok_user, "channel_id": channel_id}
 
+    # إرسال تجريبي للتأكد من ربط الروم مباشرة
     threading.Thread(target=send_discord_alert, args=(channel_id, tiktok_user, True), daemon=True).start()
-
-    t = threading.Thread(target=run_listener_in_thread, args=(tiktok_user, channel_id), daemon=True)
-    t.start()
-    active_monitors[guild_id] = t
 
     return jsonify({"success": True})
 
