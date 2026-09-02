@@ -312,21 +312,21 @@ DASHBOARD_HTML = """
                         <input type="hidden" name="token" value="{{ token }}">
                         <div class="form-group">
                             <label>السيرفر المستهدف:</label>
-                            <select name="guild_id" class="form-control">
+                            <select name="guild_id" class="form-control" onchange="window.location.href='/?token={{ token }}&guild_id=' + this.value">
                                 {% for guild in guilds %}
-                                    <option value="{{ guild['id'] }}">{{ guild['name'] }}</option>
+                                    <option value="{{ guild['id'] }}" {% if guild['id'] == selected_guild_id %}selected{% endif %}>{{ guild['name'] }}</option>
                                 {% endfor %}
                             </select>
                         </div>
 
                         <div class="form-group">
                             <label>رقم روم التنبيهات (Channel ID):</label>
-                            <input type="text" name="channel_id" class="form-control" placeholder="أدخل ID القناة هنا" required>
+                            <input type="text" name="channel_id" class="form-control" value="{{ current_config.get('channel_id', '') }}" placeholder="أدخل ID القناة هنا" required>
                         </div>
 
                         <div class="form-group">
                             <label>عنوان التنبيه:</label>
-                            <input type="text" name="top_title" class="form-control" placeholder="مثال: البث مباشر الآن!">
+                            <input type="text" name="top_title" class="form-control" value="{{ current_config.get('top_title', '') }}" placeholder="مثال: البث مباشر الآن!">
                         </div>
 
                         <button type="submit" class="btn-submit">جاهز للبث 🔥</button>
@@ -385,17 +385,25 @@ DASHBOARD_HTML = """
 @app.route('/')
 def home():
     token = request.args.get('token')
+    selected_guild_id = request.args.get('guild_id')
     payload = decode_token(token) if token else None
 
     if payload:
         logged_in = True
         user = payload.get('user')
         guilds = payload.get('guilds', [])
+        
+        if not selected_guild_id and guilds:
+            selected_guild_id = guilds[0]['id']
+            
+        current_config = GUILDS_CONFIG.get(str(selected_guild_id), {})
     else:
         logged_in = False
         user = None
         guilds = []
         token = ""
+        selected_guild_id = None
+        current_config = {}
 
     return render_template_string(
         DASHBOARD_HTML, 
@@ -403,6 +411,8 @@ def home():
         user=user, 
         guilds=guilds, 
         token=token,
+        selected_guild_id=selected_guild_id,
+        current_config=current_config,
         server_invite=DISCORD_SERVER_INVITE
     )
 
@@ -462,9 +472,6 @@ def save_settings():
         return redirect('/login')
 
     guild_id = request.form.get('guild_id')
-    guilds = payload.get('guilds', [])
-    if not guild_id and guilds:
-        guild_id = guilds[0]['id']
 
     if guild_id:
         GUILDS_CONFIG[str(guild_id)] = {
@@ -472,9 +479,8 @@ def save_settings():
             "top_title": request.form.get('top_title')
         }
         save_configs()
-        return redirect(f'/?token={token}&guild_id={guild_id}')
 
-    return redirect(f'/?token={token}')
+    return redirect(f'/?token={token}&guild_id={guild_id}')
 
 # --------------------------------------------------
 # 4. تشغيل السيرفر والبوت
