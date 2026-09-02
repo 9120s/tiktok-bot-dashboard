@@ -2,11 +2,7 @@ import os
 import requests
 from flask import Flask, render_template, request, jsonify, redirect
 
-# تحديد المسار النهائي للمجلد لتجنب مشكلة الشاشة البيضاء
-base_dir = os.path.abspath(os.path.dirname(__file__))
-template_dir = os.path.join(base_dir, 'templates')
-
-app = Flask(__name__, template_folder=template_dir)
+app = Flask(__name__, template_folder='templates')
 
 DISCORD_CLIENT_ID = os.getenv("DISCORD_CLIENT_ID", "1544289467853045861")
 DISCORD_CLIENT_SECRET = os.getenv("DISCORD_CLIENT_SECRET", "")
@@ -14,10 +10,7 @@ REDIRECT_URI = os.getenv("REDIRECT_URI", "")
 
 @app.route('/')
 def index():
-    try:
-        return render_template('index.html')
-    except Exception as e:
-        return f"<h3>حدث خطأ في تحميل الصفحة:</h3><p>{str(e)}</p>", 500
+    return render_template('index.html')
 
 @app.route('/login')
 def login():
@@ -81,4 +74,5 @@ def get_guilds():
     return jsonify({"guilds": guilds_list})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
