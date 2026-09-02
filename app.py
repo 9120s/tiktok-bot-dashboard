@@ -15,7 +15,7 @@ HTML_LAYOUT = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لوحة التحكم | TikTok Style</title>
+    <title>لوحة التحكم | TikTok Live</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
         :root {
@@ -125,7 +125,19 @@ HTML_LAYOUT = """
             width: 100%;
             max-width: 520px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+            text-align: right;
+        }
+
+        .card h2 {
             text-align: center;
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .card p.desc {
+            text-align: center;
+            color: var(--text-muted);
+            margin-bottom: 2rem;
         }
 
         .btn-tiktok {
@@ -145,19 +157,51 @@ HTML_LAYOUT = """
             border: none;
             cursor: pointer;
             box-shadow: 0 0 15px rgba(254, 44, 85, 0.5);
+            margin-top: 15px;
         }
 
-        select {
+        .btn-tiktok:hover {
+            background: #e02649;
+        }
+
+        .form-group {
+            margin-bottom: 1.2rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: bold;
+            font-size: 0.95rem;
+            color: var(--text-main);
+        }
+
+        input[type="text"], select {
             width: 100%;
             padding: 12px;
-            margin-top: 15px;
             border-radius: 8px;
             border: 1px solid var(--border-color);
             background: #000;
-            color: var(--tiktok-cyan);
-            font-size: 1rem;
+            color: #fff;
+            font-size: 0.95rem;
             outline: none;
-            font-weight: 600;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus, select:focus {
+            border-color: var(--tiktok-cyan);
+        }
+
+        .status-badge {
+            display: inline-block;
+            background: rgba(37, 244, 238, 0.15);
+            color: var(--tiktok-cyan);
+            border: 1px solid var(--tiktok-cyan);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: bold;
+            margin-bottom: 15px;
         }
 
         .error {
@@ -168,6 +212,18 @@ HTML_LAYOUT = """
             border-radius: 8px;
             margin-top: 15px;
             font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .success {
+            color: #4ade80;
+            background: rgba(74, 222, 128, 0.1);
+            border: 1px solid #4ade80;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-size: 0.9rem;
+            text-align: center;
         }
 
         @media (max-width: 768px) {
@@ -179,7 +235,6 @@ HTML_LAYOUT = """
 </head>
 <body>
 
-    <!-- القائمة الجانبية -->
     <aside class="sidebar">
         <div>
             <div class="brand">
@@ -208,11 +263,10 @@ HTML_LAYOUT = """
         </ul>
     </aside>
 
-    <!-- المحتوى الرئيسي -->
     <main class="main-content">
         <div class="card">
             <h2>إدارة البوت</h2>
-            <p style="color: var(--text-muted); margin-bottom: 2rem;">قم بتسجيل الدخول لاختيار السيرفر والتحكم بالإعدادات</p>
+            <p class="desc">قم بتسجيل الدخول لاختيار السيرفر والتحكم بالإعدادات</p>
             
             <div id="content">
                 <a href="/login" class="btn-tiktok">
@@ -232,24 +286,86 @@ HTML_LAYOUT = """
         }
 
         if (token) {
-            document.getElementById('content').innerHTML = '<p style="color:var(--tiktok-cyan);"><i class="fa-solid fa-spinner fa-spin"></i> جاري جلب السيرفرات التي تملك فيها رتبة...</p>';
+            document.getElementById('content').innerHTML = '<p style="color:var(--tiktok-cyan); text-align:center;"><i class="fa-solid fa-spinner fa-spin"></i> جاري جلب السيرفرات...</p>';
             fetch('/api/guilds?token=' + token)
                 .then(res => res.json())
                 .then(data => {
                     if (data.guilds && data.guilds.length > 0) {
-                        let html = '<label style="display:block; text-align:right; margin-bottom:8px; font-weight:bold;">اختر السيرفر اللي فيه رتبتك:</label><select id="guildSelect">';
+                        let html = `
+                            <div class="form-group">
+                                <label>اختر السيرفر اللي فيه رتبتك:</label>
+                                <select id="guildSelect">
+                        `;
                         data.guilds.forEach(g => {
                             html += `<option value="${g.id}">${g.name}</option>`;
                         });
-                        html += '</select>';
+                        html += `
+                                </select>
+                            </div>
+
+                            <div style="text-align: center; margin: 10px 0;">
+                                <span class="status-badge"><i class="fa-solid fa-bolt"></i> حالة البوت: جاهز للبث🔥</span>
+                            </div>
+
+                            <div class="form-group">
+                                <label><i class="fa-brands fa-tiktok"></i> يوزر التيك توك (TikTok Username):</label>
+                                <input type="text" id="tiktokUser" placeholder="مثال: 2vce4">
+                            </div>
+
+                            <div class="form-group">
+                                <label><i class="fa-solid fa-hashtag"></i> رقم/آيدي روم التنبيهات (Channel ID):</label>
+                                <input type="text" id="channelId" placeholder="مثال: 123456789012345678">
+                            </div>
+
+                            <button onclick="saveSettings()" class="btn-tiktok">
+                                <i class="fa-solid fa-floppy-disk"></i> حفظ التنبيهات
+                            </button>
+
+                            <div id="responseMsg"></div>
+                        `;
                         document.getElementById('content').innerHTML = html;
                     } else {
-                        document.getElementById('content').innerHTML = '<p>لم يتم العثور على سيرفرات تملك فيها رتبة أو صلاحيات إدارية.</p>';
+                        document.getElementById('content').innerHTML = '<p style="text-align:center;">لم يتم العثور على سيرفرات تملك فيها رتبة.</p>';
                     }
                 })
                 .catch(err => {
                     document.getElementById('content').innerHTML = '<div class="error">حدث خطأ أثناء جلب البيانات.</div>';
                 });
+        }
+
+        function saveSettings() {
+            const guildId = document.getElementById('guildSelect').value;
+            const tiktokUser = document.getElementById('tiktokUser').value.trim();
+            const channelId = document.getElementById('channelId').value.trim();
+            const msgDiv = document.getElementById('responseMsg');
+
+            if (!tiktokUser || !channelId) {
+                msgDiv.innerHTML = '<div class="error">يرجى ملء يوزر التيك توك ورقم الروم أولاً.</div>';
+                return;
+            }
+
+            msgDiv.innerHTML = '<p style="color:var(--tiktok-cyan); text-align:center; margin-top:10px;"><i class="fa-solid fa-spinner fa-spin"></i> جاري حفظ التنبيهات...</p>';
+
+            fetch('/api/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    guild_id: guildId,
+                    tiktok_user: tiktokUser,
+                    channel_id: channelId
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-circle-check"></i> تم حفظ إعدادات التنبيهات بنجاح! جاهز للبث🔥</div>';
+                } else {
+                    msgDiv.innerHTML = '<div class="error">حدث خطأ أثناء الحفظ.</div>';
+                }
+            })
+            .catch(e => {
+                msgDiv.innerHTML = '<div class="error">خطأ في الاتصال بالسيرفر.</div>';
+            });
         }
     </script>
 </body>
@@ -309,17 +425,16 @@ def get_guilds():
             if res.status_code == 200:
                 for g in res.json():
                     permissions = int(g.get('permissions', 0))
-                    # يفحص إذا كان مالك السيرفر أو يمتلك أي صلاحية إدارية/إشرافية (مثل إدارة السيرفر، الرتب، القنوات، طرد/حظر، أو الميوت)
                     has_role_permission = (
                         g.get('owner') or 
-                        (permissions & 0x8) != 0 or         # Administrator
-                        (permissions & 0x20) != 0 or        # Manage Guild
-                        (permissions & 0x10000000) != 0 or  # Manage Roles
-                        (permissions & 0x10) != 0 or        # Manage Channels
-                        (permissions & 0x2) != 0 or         # Kick Members
-                        (permissions & 0x4) != 0 or         # Ban Members
-                        (permissions & 0x400000) != 0 or    # Mute Members
-                        (permissions & 0x2000) != 0         # Manage Messages
+                        (permissions & 0x8) != 0 or 
+                        (permissions & 0x20) != 0 or 
+                        (permissions & 0x10000000) != 0 or 
+                        (permissions & 0x10) != 0 or 
+                        (permissions & 0x2) != 0 or 
+                        (permissions & 0x4) != 0 or 
+                        (permissions & 0x400000) != 0 or 
+                        (permissions & 0x2000) != 0
                     )
                     if has_role_permission:
                         guilds_list.append({"id": str(g['id']), "name": g['name']})
@@ -327,6 +442,18 @@ def get_guilds():
             print("Fetch guilds error:", e)
 
     return jsonify({"guilds": guilds_list})
+
+@app.route('/api/save', methods=['POST'])
+def save_settings():
+    data = request.json
+    guild_id = data.get('guild_id')
+    tiktok_user = data.get('tiktok_user')
+    channel_id = data.get('channel_id')
+
+    # تجد هنا منطق الحفظ في قاعدة البيانات أو التحديث
+    print(f"Saved Config: Guild={guild_id}, TikTok={tiktok_user}, Channel={channel_id}")
+
+    return jsonify({"success": True})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
