@@ -19,59 +19,32 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 SECRET_KEY = os.environ.get("SECRET_KEY", "mysecretkey12345")
 
 CLIENT_ID = os.environ.get("CLIENT_ID") or os.environ.get("DISCORD_CLIENT_ID", "")
-CLIENT_SECRET = os.environ.get("CLIENT_SECRET") or os.environ.get("DISCORD_CLIENT_SECRET", "")
+CLIENT_SECRET = os.environ.get("CLIENT_SECRET") or os.environ.get("DISCORD_SECRET", "")
 REDIRECT_URI = os.environ.get("REDIRECT_URI") or os.environ.get("DISCORD_REDIRECT_URI", "")
 BOT_TOKEN = os.environ.get("BOT_TOKEN") or os.environ.get("DISCORD_BOT_TOKEN", "")
+
 JSONBIN_KEY = os.environ.get("JSONBIN_KEY", "")
+JSONBIN_BIN_ID = os.environ.get("JSONBIN_BIN_ID", "")
 
 DISCORD_SERVER_INVITE = "https://discord.gg/TQUFzyxM7"
 API_BASE_URL = "https://discord.com/api/v10"
-BIN_ID_FILE = "bin_id.txt"
-
-def get_bin_id():
-    if os.path.exists(BIN_ID_FILE):
-        with open(BIN_ID_FILE, "r") as f:
-            return f.read().strip()
-    return None
-
-def set_bin_id(bin_id):
-    with open(BIN_ID_FILE, "w") as f:
-        f.write(bin_id)
 
 def load_configs():
-    if not JSONBIN_KEY:
-        print("[DB Warning] JSONBIN_KEY is not set.")
+    if not JSONBIN_KEY or not JSONBIN_BIN_ID:
         return {}
     
-    bin_id = get_bin_id()
     headers = {"X-Master-Key": JSONBIN_KEY}
-
-    if bin_id:
-        try:
-            res = requests.get(f"https://api.jsonbin.io/v3/b/{bin_id}/latest", headers=headers)
-            if res.status_code == 200:
-                return res.json().get("record", {})
-        except Exception as e:
-            print(f"[DB Load Error] {e}")
-
     try:
-        headers["Content-Type"] = "application/json"
-        headers["X-Bin-Private"] = "true"
-        res = requests.post("https://api.jsonbin.io/v3/b", headers=headers, json={})
+        res = requests.get(f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN_ID}/latest", headers=headers)
         if res.status_code == 200:
-            new_id = res.json()["metadata"]["id"]
-            set_bin_id(new_id)
-            return {}
+            return res.json().get("record", {})
     except Exception as e:
-        print(f"[DB Init Error] {e}")
+        print(f"[DB Load Error] {e}")
 
     return {}
 
 def save_configs():
-    if not JSONBIN_KEY:
-        return
-    bin_id = get_bin_id()
-    if not bin_id:
+    if not JSONBIN_KEY or not JSONBIN_BIN_ID:
         return
 
     headers = {
@@ -79,7 +52,7 @@ def save_configs():
         "X-Master-Key": JSONBIN_KEY
     }
     try:
-        requests.put(f"https://api.jsonbin.io/v3/b/{bin_id}", headers=headers, json=GUILDS_CONFIG)
+        requests.put(f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN_ID}", headers=headers, json=GUILDS_CONFIG)
     except Exception as e:
         print(f"[DB Save Error] {e}")
 
@@ -100,7 +73,7 @@ def decode_token(token):
         return None
 
 # --------------------------------------------------
-# 2. إعدادات بوت ديسكورد (Discord Bot)
+# 2. إعدادات بوت ديسكورد
 # --------------------------------------------------
 
 intents = discord.Intents.default()
@@ -152,23 +125,13 @@ DASHBOARD_HTML = """
             border-bottom: 1px solid var(--border-color);
         }
 
-        .menu-btn {
-            background: none;
-            border: none;
-            color: var(--text-color);
-            font-size: 24px;
-            cursor: pointer;
-        }
-
+        .menu-btn { background: none; border: none; color: var(--text-color); font-size: 24px; cursor: pointer; }
         .brand { font-size: 20px; font-weight: bold; display: flex; align-items: center; gap: 10px; }
         .brand i { color: var(--accent-color); }
 
         .sidebar {
             position: fixed;
-            top: 0;
-            right: -280px;
-            width: 280px;
-            height: 100%;
+            top: 0; right: -280px; width: 280px; height: 100%;
             background-color: var(--sidebar-bg);
             box-shadow: -5px 0 15px rgba(0,0,0,0.5);
             transition: right 0.3s ease;
@@ -179,41 +142,25 @@ DASHBOARD_HTML = """
         }
 
         .sidebar.active { right: 0; }
-
         .sidebar-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-bottom: 20px;
-            border-bottom: 1px solid var(--border-color);
-            margin-bottom: 20px;
+            display: flex; justify-content: space-between; align-items: center;
+            padding-bottom: 20px; border-bottom: 1px solid var(--border-color); margin-bottom: 20px;
         }
 
         .close-btn { background: none; border: none; color: var(--text-muted); font-size: 20px; cursor: pointer; }
-
         .nav-links { list-style: none; display: flex; flex-direction: column; gap: 10px; height: 100%; }
         .nav-links li a {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 15px;
-            color: var(--text-muted);
-            text-decoration: none;
-            border-radius: 8px;
+            display: flex; align-items: center; gap: 12px; padding: 12px 15px;
+            color: var(--text-muted); text-decoration: none; border-radius: 8px;
         }
 
         .nav-links li a:hover, .nav-links li a.active {
-            background-color: rgba(255, 0, 80, 0.1);
-            color: var(--accent-color);
+            background-color: rgba(255, 0, 80, 0.1); color: var(--accent-color);
         }
 
         .sidebar-footer {
-            margin-top: auto;
-            border-top: 1px solid var(--border-color);
-            padding-top: 15px;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
+            margin-top: auto; border-top: 1px solid var(--border-color);
+            padding-top: 15px; display: flex; flex-direction: column; gap: 10px;
         }
 
         .discord-btn-link {
@@ -224,11 +171,8 @@ DASHBOARD_HTML = """
         }
 
         .overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.6);
-            display: none;
-            z-index: 999;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); display: none; z-index: 999;
         }
         .overlay.active { display: block; }
 
@@ -255,37 +199,20 @@ DASHBOARD_HTML = """
         }
 
         .btn-submit {
-            width: 100%;
-            padding: 12px;
-            background-color: var(--accent-color);
-            border: none;
-            border-radius: 8px;
-            color: white;
-            font-weight: bold;
-            font-size: 16px;
-            cursor: pointer;
+            width: 100%; padding: 12px; background-color: var(--accent-color);
+            border: none; border-radius: 8px; color: white; font-weight: bold;
+            font-size: 16px; cursor: pointer;
         }
 
         .btn-login {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            background-color: var(--discord-color);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: bold;
+            display: inline-flex; align-items: center; gap: 10px;
+            background-color: var(--discord-color); color: white;
+            padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold;
         }
 
         .alert-success {
-            display: none;
-            padding: 12px;
-            background-color: #2ed573;
-            color: white;
-            border-radius: 8px;
-            margin-bottom: 15px;
-            text-align: center;
+            display: none; padding: 12px; background-color: #2ed573;
+            color: white; border-radius: 8px; margin-bottom: 15px; text-align: center;
         }
 
         .tab-content { display: none; }
@@ -340,7 +267,7 @@ DASHBOARD_HTML = """
                 <div class="card">
                     <h2 style="margin-bottom: 20px;"><i class="fa-solid fa-bell" style="color: var(--accent-color);"></i> إعدادات التنبيهات</h2>
                     
-                    <div id="save-msg" class="alert-success">تم حفظ الإعدادات بنجاح بشكل دائم! ✅</div>
+                    <div id="save-msg" class="alert-success">تم حفظ البيانات بنجاح! ✅</div>
 
                     <form id="settings-form" onsubmit="saveSettings(event)">
                         <div class="form-group">
@@ -354,12 +281,12 @@ DASHBOARD_HTML = """
 
                         <div class="form-group">
                             <label>رقم روم التنبيهات (Channel ID):</label>
-                            <input type="text" id="channel_id" name="channel_id" class="form-control" value="{{ current_config.get('channel_id', '') }}" placeholder="أدخل ID القناة هنا" required>
+                            <input type="text" id="channel_id" name="channel_id" class="form-control" value="{{ current_config.get('channel_id', '') }}" required>
                         </div>
 
                         <div class="form-group">
                             <label>عنوان التنبيه:</label>
-                            <input type="text" id="top_title" name="top_title" class="form-control" value="{{ current_config.get('top_title', '') }}" placeholder="مثال: البث مباشر الآن!">
+                            <input type="text" id="top_title" name="top_title" class="form-control" value="{{ current_config.get('top_title', '') }}" required>
                         </div>
 
                         <button type="submit" class="btn-submit">جاهز للبث 🔥</button>
@@ -437,7 +364,7 @@ DASHBOARD_HTML = """
                 msg.style.display = 'block';
                 setTimeout(() => {
                     window.location.href = '/?token=' + currentToken + '&guild_id=' + guildId;
-                }, 1000);
+                }, 800);
             }
         }
     </script>
@@ -447,6 +374,9 @@ DASHBOARD_HTML = """
 
 @app.route('/')
 def home():
+    global GUILDS_CONFIG
+    GUILDS_CONFIG = load_configs()
+    
     token = request.args.get('token')
     selected_guild_id = request.args.get('guild_id')
     payload = decode_token(token) if token else None
@@ -548,7 +478,7 @@ def api_save_settings():
     return jsonify({'status': 'error', 'message': 'Invalid Guild ID'}), 400
 
 # --------------------------------------------------
-# 4. تشغيل السيرفر والبوت
+# 4. التشغيل
 # --------------------------------------------------
 
 if __name__ == '__main__':
