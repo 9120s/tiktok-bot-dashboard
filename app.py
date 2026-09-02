@@ -6,7 +6,7 @@ app = Flask(__name__)
 
 DISCORD_CLIENT_ID = os.getenv("CLIENT_ID", os.getenv("DISCORD_CLIENT_ID", "1544289467853045861")).strip()
 DISCORD_CLIENT_SECRET = os.getenv("CLIENT_SECRET", os.getenv("DISCORD_CLIENT_SECRET", "")).strip()
-BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()  # ضع توكن البوت الخاص بك في متغيرات البيئة Render باسم BOT_TOKEN
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 
 SERVER_INVITE_URL = "https://discord.gg/YOUR_INVITE_CODE"
 
@@ -302,7 +302,6 @@ HTML_LAYOUT = """
         }
 
         if (token) {
-            // تحديث زر القائمة الجانبية إلى تسجيل الخروج
             const authBtn = document.getElementById('authBtn');
             authBtn.href = '/';
             authBtn.innerHTML = '<i class="fa-solid fa-right-from-bracket"></i> تسجيل الخروج';
@@ -339,7 +338,7 @@ HTML_LAYOUT = """
                             </div>
 
                             <button onclick="saveSettings()" class="btn-tiktok">
-                                <i class="fa-solid fa-floppy-disk"></i> حفظ التنبيهات وإرسال تجريبي
+                                <i class="fa-solid fa-floppy-disk"></i> حفظ التنبيهات
                             </button>
 
                             <div id="responseMsg"></div>
@@ -367,7 +366,7 @@ HTML_LAYOUT = """
                 return;
             }
 
-            msgDiv.innerHTML = '<p style="color:var(--tiktok-cyan); text-align:center; margin-top:10px;"><i class="fa-solid fa-spinner fa-spin"></i> جاري حفظ وإرسال التنبيه إلى الديسكورد...</p>';
+            msgDiv.innerHTML = '<p style="color:var(--tiktok-cyan); text-align:center; margin-top:10px;"><i class="fa-solid fa-spinner fa-spin"></i> جاري حفظ التنبيهات...</p>';
 
             fetch('/api/save', {
                 method: 'POST',
@@ -381,7 +380,7 @@ HTML_LAYOUT = """
             .then(res => res.json())
             .then(data => {
                 if(data.success) {
-                    msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-circle-check"></i> تم حفظ الإعدادات وتم إرسال تنبيه في روم الديسكورد! 🔥</div>';
+                    msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-circle-check"></i> تم حفظ إعدادات التنبيهات بنجاح! جاهز للبث🔥</div>';
                     document.getElementById('savedGuildsList').innerHTML = `
                         <div style="background:#000; padding:15px; border-radius:8px; border:1px solid var(--tiktok-cyan); text-align:right;">
                             <p style="color:var(--tiktok-cyan); font-weight:bold;"><i class="fa-solid fa-server"></i> ${guildName}</p>
@@ -389,7 +388,7 @@ HTML_LAYOUT = """
                         </div>
                     `;
                 } else {
-                    msgDiv.innerHTML = `<div class="error">خطأ في الإرسال: ${data.error || 'تأكد من صلاحيات البوت ورقم الروم'}</div>`;
+                    msgDiv.innerHTML = `<div class="error">حدث خطأ أثناء الحفظ: ${data.error || 'تأكد من البيانات'}</div>`;
                 }
             })
             .catch(e => {
@@ -479,31 +478,8 @@ def save_settings():
     tiktok_user = data.get('tiktok_user')
     channel_id = data.get('channel_id')
 
-    if not BOT_TOKEN:
-        return jsonify({"success": False, "error": "لم يتم ضبط BOT_TOKEN في متغيرات البيئة على Render."})
-
-    # إرسال رسالة تنبيه مباشرة عبر Discord API
-    discord_api_url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
-    headers = {
-        "Authorization": f"Bot {BOT_TOKEN}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "embeds": [{
-            "title": "🔴 بث جديد مباشر الان!",
-            "description": f"بدأ **{tiktok_user}** بث جديد على تيك توك الآن! 🔥\n\n[اضغط هنا لمشاهدة البث مباشرة](https://www.tiktok.com/@{tiktokUser}/live)",
-            "color": 16657493
-        }]
-    }
-
-    try:
-        response = requests.post(discord_api_url, json=payload, headers=headers)
-        if response.status_code in [200, 201]:
-            return jsonify({"success": True})
-        else:
-            return jsonify({"success": False, "error": f"كود الخطأ من ديسكورد: {response.status_code}"})
-    except Exception as e:
-        return jsonify({"success": False, "error": str(e)})
+    print(f"Saved Config: Guild={guild_id}, TikTok={tiktok_user}, Channel={channel_id}")
+    return jsonify({"success": True})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
