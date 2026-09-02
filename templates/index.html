@@ -1,371 +1,19 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لوحة تحكم بوت التيك توك</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-
-        body {
-            background-color: #0f0f12;
-            color: #ffffff;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .header {
-            height: 70px;
-            background-color: #16161a;
-            border-bottom: 1px solid #232329;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 25px;
-            position: relative;
-            z-index: 100;
-        }
-
-        .header-left {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-
-        .header-right {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .menu-toggle {
-            background: none;
-            border: none;
-            color: #ffffff;
-            font-size: 22px;
-            cursor: pointer;
-            padding: 5px 10px;
-            border-radius: 6px;
-            transition: background 0.2s;
-        }
-
-        .menu-toggle:hover {
-            background-color: #232329;
-        }
-
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 18px;
-            font-weight: bold;
-            color: #ff0050;
-        }
-
-        .btn-join-server {
-            background-color: #24242c;
-            color: #5865F2;
-            border: 1px solid #5865F2;
-            padding: 8px 16px;
-            border-radius: 6px;
-            text-decoration: none;
-            font-weight: bold;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.2s;
-        }
-
-        .btn-join-server:hover {
-            background-color: #5865F2;
-            color: white;
-        }
-
-        .btn-login {
-            background-color: #5865F2;
-            color: white;
-            padding: 8px 16px;
-            border-radius: 6px;
-            text-decoration: none;
-            font-weight: bold;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: background 0.2s;
-        }
-
-        .btn-login:hover {
-            background-color: #4752C4;
-        }
-
-        .sidebar {
-            position: fixed;
-            top: 70px;
-            right: -280px;
-            width: 260px;
-            height: calc(100vh - 70px);
-            background-color: #16161a;
-            border-left: 1px solid #232329;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            padding: 20px;
-            transition: right 0.3s ease;
-            z-index: 99;
-            box-shadow: -5px 0 15px rgba(0,0,0,0.5);
-        }
-
-        .sidebar.open {
-            right: 0;
-        }
-
-        .nav-list {
-            list-style: none;
-        }
-
-        .nav-item {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 16px;
-            color: #a0a0ab;
-            text-decoration: none;
-            border-radius: 8px;
-            margin-bottom: 8px;
-            transition: all 0.2s;
-            cursor: pointer;
-        }
-
-        .nav-item:hover, .nav-item.active {
-            background-color: #222228;
-            color: #ffffff;
-        }
-
-        .container {
-            padding: 30px;
-            max-width: 800px;
-            margin: 0 auto;
-            width: 100%;
-        }
-
-        .card {
-            background: #18181c;
-            border-radius: 12px;
-            padding: 25px;
-            margin-bottom: 25px;
-            border: 1px solid #26262e;
-        }
-
-        .card-title {
-            font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .form-group {
-            margin-bottom: 18px;
-        }
-
-        label {
-            display: block;
-            font-size: 13px;
-            color: #a0a0ab;
-            margin-bottom: 8px;
-        }
-
-        select, input {
-            width: 100%;
-            padding: 12px 14px;
-            border-radius: 8px;
-            border: 1px solid #2d2d38;
-            background-color: #0f0f12;
-            color: #ffffff;
-            font-size: 14px;
-            outline: none;
-        }
-
-        select:focus, input:focus {
-            border-color: #ff0050;
-        }
-
-        button.btn-submit {
-            width: 100%;
-            padding: 14px;
-            border: none;
-            border-radius: 8px;
-            background: linear-gradient(90deg, #ff0050, #00f2fe);
-            color: #ffffff;
-            font-weight: bold;
-            font-size: 15px;
-            cursor: pointer;
-        }
-
-        .tab-content {
-            display: none;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        .alert {
-            padding: 12px;
-            border-radius: 8px;
-            margin-top: 15px;
-            display: none;
-            font-size: 14px;
-            text-align: center;
-        }
-        .alert-success { background: #133a27; color: #2ecc71; }
-        .alert-error { background: #421822; color: #ff4d6d; }
-    </style>
-</head>
-<body>
-
-    <header class="header">
-        <div class="header-left">
-            <button class="menu-toggle" id="menuBtn" title="القائمة">
-                <i class="fa-solid fa-ellipsis-vertical"></i>
-            </button>
-            <div class="brand">
-                <i class="fa-brands fa-tiktok"></i>
-                <span>TikTok Bot Dashboard</span>
-            </div>
-        </div>
-        <div class="header-right">
-            <!-- زر الانضمام لسيرفر الديسكورد -->
-            <a href="https://discord.gg/VzWTX4rDWY" target="_blank" class="btn-join-server">
-                <i class="fa-brands fa-discord"></i> انضمام للسيرفر
-            </a>
-            
-            <div id="authContainer">
-                <a href="https://discord.com/oauth2/authorize?client_id=1544289467853045861&response_type=code&redirect_uri=https%3A%2F%2Ftiktok-bot-2s2-dashboard.onrender.com%2Fcallback&scope=identify+guilds" class="btn-login">
-                    <i class="fa-solid fa-right-to-bracket"></i> تسجيل الدخول
-                </a>
-            </div>
-        </div>
-    </header>
-
-    <aside class="sidebar" id="sidebar">
-        <ul class="nav-list">
-            <li><a class="nav-item active" onclick="switchTab('settings', this)"><i class="fa-solid fa-sliders"></i> الإعدادات</a></li>
-            <li><a class="nav-item" onclick="switchTab('servers', this)"><i class="fa-solid fa-server"></i> السيرفرات</a></li>
-            <li><a class="nav-item" onclick="switchTab('logs', this)"><i class="fa-solid fa-bell"></i> السجلات</a></li>
-        </ul>
-        <div>
-            <!-- رابط سيرفر الديسكورد في القائمة الجانبية -->
-            <a href="https://discord.gg/VzWTX4rDWY" target="_blank" class="nav-item" style="color: #5865F2;">
-                <i class="fa-brands fa-discord"></i> سيرفر الديسكورد
-            </a>
-            <a class="nav-item" onclick="switchTab('general', this)"><i class="fa-solid fa-gear"></i> إعدادات عامة</a>
-        </div>
-    </aside>
-
-    <div class="container">
-        <div id="tab-settings" class="tab-content active">
-            <div class="card">
-                <div class="card-title">
-                    <i class="fa-solid fa-gear" style="color: #ff0050;"></i> إعدادات التنبيه المباشر
-                </div>
-                <form id="configForm">
-                    <div class="form-group">
-                        <label>السيرفر المستهدف:</label>
-                        <select id="guild_id" required>
-                            <option value="">جاري تحميل السيرفرات...</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group">
-                        <label>حساب التيك توك (TikTok Username):</label>
-                        <input type="text" id="tiktok_username" placeholder="مثال: 2vce4" required>
-                    </div>
-
-                    <div class="form-group">
-                        <label>رقم روم التنبيهات (Channel ID):</label>
-                        <input type="text" id="channel_id" placeholder="مثال: 1538986763622813766" required>
-                    </div>
-
-                    <div class="form-group">
-                        <label>عنوان التنبيه:</label>
-                        <input type="text" id="message_title" placeholder="مثال: بدأ بث حياكم!" required>
-                    </div>
-
-                    <button type="submit" class="btn-submit">حفظ الإعدادات 💾</button>
-                </form>
-                <div id="statusAlert" class="alert"></div>
-            </div>
-        </div>
-
-        <div id="tab-servers" class="tab-content">
-            <div class="card">
-                <div class="card-title"><i class="fa-solid fa-server"></i> السيرفرات المربوطة</div>
-                <div id="serversList" style="color: #aaa;">جاري جلب السيرفرات...</div>
-            </div>
-        </div>
-
-        <div id="tab-logs" class="tab-content">
-            <div class="card">
-                <div class="card-title"><i class="fa-solid fa-bell"></i> سجل التنبيهات</div>
-                <p style="color: #aaa;">لا توجد تنبيهات سابقة للعرض.</p>
-            </div>
-        </div>
-
-        <div id="tab-general" class="tab-content">
-            <div class="card">
-                <div class="card-title"><i class="fa-solid fa-gear"></i> الإعدادات العامة</div>
-                <p style="color: #aaa;">إعدادات النظام العامة وتخصيص البوت.</p>
-            </div>
-        </div>
-    </div>
-
 <script>
-    const menuBtn = document.getElementById('menuBtn');
-    const sidebar = document.getElementById('sidebar');
-
-    menuBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        sidebar.classList.toggle('open');
-    });
-
-    document.addEventListener('click', (e) => {
-        if (!sidebar.contains(e.target) && !menuBtn.contains(e.target)) {
-            sidebar.classList.remove('open');
-        }
-    });
-
-    function switchTab(tabName, el) {
-        document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-        document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-        
-        document.getElementById(`tab-${tabName}`).classList.add('active');
-        if (el) el.classList.add('active');
-        sidebar.classList.remove('open');
-    }
-
+    // 1. قراءة التوكن من رابط URL بعد العودة من ديسكورد وحفظه
     const urlParams = new URLSearchParams(window.location.search);
     const tokenFromUrl = urlParams.get('token');
-    const authContainer = document.getElementById('authContainer');
 
     if (tokenFromUrl) {
         localStorage.setItem('discord_token', tokenFromUrl);
+        // إزالة التوكن من الرابط لإبقاء الشكل نظيفاً
         window.history.replaceState({}, document.title, window.location.pathname);
     }
 
     const currentToken = localStorage.getItem('discord_token');
+    const authContainer = document.getElementById('authContainer');
 
-    if (currentToken && authContainer) {
+    // 2. تحديث شكل الزر في حال وجود توكن مسجل
+    if (currentToken && currentToken !== 'null' && authContainer) {
         authContainer.innerHTML = `
             <a href="/" onclick="localStorage.removeItem('discord_token');" class="btn-login" style="background-color: #232329; border: 1px solid #3d3d4a;">
                 <i class="fa-solid fa-right-from-bracket"></i> تسجيل الخروج
@@ -373,10 +21,10 @@
         `;
     }
 
+    // 3. دالة جلب السيرفرات بناءً على التوكن
     async function loadGuilds() {
-        const activeToken = currentToken || 'demo';
         const guildSelect = document.getElementById('guild_id');
-        const serversList = document.getElementById('serversList');
+        const activeToken = localStorage.getItem('discord_token') || '';
 
         try {
             const res = await fetch(`/api/guilds?token=${activeToken}`);
@@ -384,79 +32,20 @@
             
             if (data.guilds && data.guilds.length > 0) {
                 guildSelect.innerHTML = '<option value="">اختر السيرفر...</option>';
-                serversList.innerHTML = '';
-
                 data.guilds.forEach(g => {
                     const opt = document.createElement('option');
                     opt.value = g.id;
                     opt.innerText = g.name;
                     guildSelect.appendChild(opt);
-
-                    serversList.innerHTML += `<div style="padding: 10px; background: #222; margin-bottom: 8px; border-radius: 6px;">🔹 ${g.name} (ID: ${g.id})</div>`;
                 });
             } else {
-                guildSelect.innerHTML = '<option value="1">السيرفر الافتراضي</option>';
-                serversList.innerHTML = '<p style="color: #aaa;">لم يتم العثور على سيرفرات مرتبط بها البوت.</p>';
+                guildSelect.innerHTML = '<option value="">لم يتم العثور على سيرفرات</option>';
             }
         } catch (e) {
-            console.error(e);
-            guildSelect.innerHTML = '<option value="1">السيرفر الافتراضي</option>';
+            console.error('خطأ في جلب السيرفرات:', e);
         }
     }
 
-    async function loadData() {
-        if (!currentToken) return;
-        try {
-            const res = await fetch(`/api/config?token=${currentToken}`);
-            const config = await res.json();
-            if (config) {
-                if(config.guild_id) document.getElementById('guild_id').value = config.guild_id;
-                if(config.tiktok_username) document.getElementById('tiktok_username').value = config.tiktok_username;
-                if(config.channel_id) document.getElementById('channel_id').value = config.channel_id;
-                if(config.message_title) document.getElementById('message_title').value = config.message_title;
-            }
-        } catch (e) {
-            console.error(e);
-        }
-    }
-
-    document.getElementById('configForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const showAlert = (msg, isSuccess) => {
-            const el = document.getElementById('statusAlert');
-            el.className = `alert ${isSuccess ? 'alert-success' : 'alert-error'}`;
-            el.innerText = msg;
-            el.style.display = 'block';
-            setTimeout(() => el.style.display = 'none', 4000);
-        };
-
-        const activeToken = currentToken || 'demo';
-
-        const payload = {
-            guild_id: document.getElementById('guild_id').value || "1",
-            tiktok_username: document.getElementById('tiktok_username').value.replace('@', '').trim(),
-            channel_id: document.getElementById('channel_id').value.trim(),
-            message_title: document.getElementById('message_title').value.trim()
-        };
-
-        try {
-            const res = await fetch(`/api/config?token=${activeToken}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
-            if (res.ok) {
-                showAlert('تم حفظ الإعدادات بنجاح! ✅', true);
-            } else {
-                showAlert('حدث خطأ أثناء الحفظ', false);
-            }
-        } catch (err) {
-            showAlert('فشل الاتصال بالسيرفر', false);
-        }
-    });
-
-    loadGuilds().then(loadData);
+    // تشغيل جلب السيرفرات عند فتح الصفحة
+    loadGuilds();
 </script>
-
-</body>
-</html>
