@@ -73,24 +73,75 @@ def decode_token(token):
         return None
 
 # --------------------------------------------------
-# 2. إعدادات بوت ديسكورد
+# 2. إعدادات بوت ديسكورد والأوامر
 # --------------------------------------------------
 
 intents = discord.Intents.default()
 intents.guilds = True
 intents.messages = True
+intents.message_content = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
+# أمر إعداد التنبيه مع مسح أثر الأمر فوراً وإرسال تأكيد خاص للمستخدم فقط
+@bot.command(name="setup")
+@commands.has_permissions(administrator=True)
+async def setup_notifications(ctx, channel_id: str, *, title: str):
+    """
+    طريقة الاستخدام: !setup <رقم_الروم> <عنوان_التنبيه>
+    """
+    # مسح أمر المستخدم تلقائياً حتى لا يراه أحد في الشات
+    try:
+        await ctx.message.delete()
+    except Exception:
+        pass
+
+    guild_id = str(ctx.guild.id)
+    channel = ctx.guild.get_channel(int(channel_id)) if channel_id.isdigit() else None
+    
+    if not channel:
+        try:
+            await ctx.author.send("❌ لم يتم العثور على قناة بهذا الرقم في هذا السيرفر! تأكد من رقم الروم (Channel ID).")
+        except Exception:
+            await ctx.send("❌ لم يتم العثور على القناة.", delete_after=5)
+        return
+
+    GUILDS_CONFIG[guild_id] = {
+        "channel_id": channel_id,
+        "top_title": title
+    }
+    save_configs()
+    
+    embed = discord.Embed(
+        title="🔒 تم إعداد التنبيهات بنجاح (خاص بك)",
+        color=discord.Color.green()
+    )
+    embed.add_field(name="السيرفر:", value=ctx.guild.name, inline=False)
+    embed.add_field(name="الروم:", value=f"<#{channel_id}> (`{channel_id}`)", inline=False)
+    embed.add_field(name="عنوان التنبيه:", value=title, inline=False)
+    
+    # إرسال النتيجة في الخاص للمستخدم فقط
+    try:
+        await ctx.author.send(embed=embed)
+    except Exception:
+        await ctx.send("✅ تم الحفظ بنجاح!", delete_after=5)
+
+@setup_notifications.error
+async def setup_error(ctx, error):
+    if isinstance(error, commands.MissingPermissions):
+        await ctx.send("❌ هذا الأمر مخصص للمشرفين فقط.", delete_after=5)
+    elif isinstance(error, commands.MissingRequiredArgument):
+        await ctx.send("❌ طريقة الاستخدام الصحيحة:\n`!setup <رقم_الروم> <العنوان>`", delete_after=5)
+
 def run_bot():
     if BOT_TOKEN:
         bot.run(BOT_TOKEN)
 
 # --------------------------------------------------
-# 3. واجهة لوحة التحكم
+# 3. واجهة لوحة التحكم (Flask Web App)
 # --------------------------------------------------
 
 DASHBOARD_HTML = """
@@ -117,12 +168,8 @@ DASHBOARD_HTML = """
         body { background-color: var(--bg-color); color: var(--text-color); min-height: 100vh; overflow-x: hidden; }
 
         .navbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 15px 25px;
-            background-color: var(--sidebar-bg);
-            border-bottom: 1px solid var(--border-color);
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 15px 25px; background-color: var(--sidebar-bg); border-bottom: 1px solid var(--border-color);
         }
 
         .menu-btn { background: none; border: none; color: var(--text-color); font-size: 24px; cursor: pointer; }
@@ -130,15 +177,9 @@ DASHBOARD_HTML = """
         .brand i { color: var(--accent-color); }
 
         .sidebar {
-            position: fixed;
-            top: 0; right: -280px; width: 280px; height: 100%;
-            background-color: var(--sidebar-bg);
-            box-shadow: -5px 0 15px rgba(0,0,0,0.5);
-            transition: right 0.3s ease;
-            z-index: 1000;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
+            position: fixed; top: 0; right: -280px; width: 280px; height: 100%;
+            background-color: var(--sidebar-bg); box-shadow: -5px 0 15px rgba(0,0,0,0.5);
+            transition: right 0.3s ease; z-index: 1000; padding: 20px; display: flex; flex-direction: column;
         }
 
         .sidebar.active { right: 0; }
@@ -178,24 +219,16 @@ DASHBOARD_HTML = """
 
         .container { max-width: 900px; margin: 40px auto; padding: 0 20px; }
         .card {
-            background-color: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 30px;
-            margin-bottom: 20px;
+            background-color: var(--card-bg); border: 1px solid var(--border-color);
+            border-radius: 12px; padding: 30px; margin-bottom: 20px;
         }
 
         .form-group { margin-bottom: 20px; text-align: right; }
         .form-group label { display: block; margin-bottom: 8px; color: var(--text-muted); font-size: 14px; }
         .form-control {
-            width: 100%;
-            padding: 12px 15px;
-            background-color: #101117;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            color: var(--text-color);
-            font-size: 14px;
-            outline: none;
+            width: 100%; padding: 12px 15px; background-color: #101117;
+            border: 1px solid var(--border-color); border-radius: 8px; color: var(--text-color);
+            font-size: 14px; outline: none;
         }
 
         .btn-submit {
@@ -214,6 +247,32 @@ DASHBOARD_HTML = """
             display: none; padding: 12px; background-color: #2ed573;
             color: white; border-radius: 8px; margin-bottom: 15px; text-align: center;
         }
+
+        .saved-box {
+            background: #101117;
+            border: 1px solid var(--accent-color);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 25px;
+        }
+
+        .saved-box h4 {
+            color: var(--accent-color);
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .saved-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 14px;
+        }
+
+        .saved-item:last-child { border-bottom: none; }
 
         .tab-content { display: none; }
         .tab-content.active { display: block; }
@@ -239,7 +298,7 @@ DASHBOARD_HTML = """
             <button class="close-btn" onclick="toggleMenu()"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <ul class="nav-links">
-            <li><a href="#" class="active" onclick="switchTab('settings')"><i class="fa-solid fa-bell"></i> إعدادات البث والتنبيهات</a></li>
+            <li><a href="#" class="active" onclick="switchTab('settings')"><i class="fa-solid fa-bell"></i> إعدادات التنبيهات</a></li>
             <li><a href="#" onclick="switchTab('top3')"><i class="fa-solid fa-trophy"></i> أفضل ثوالث (Top Streamers)</a></li>
             
             <div class="sidebar-footer">
@@ -289,8 +348,22 @@ DASHBOARD_HTML = """
                             <input type="text" id="top_title" name="top_title" class="form-control" value="{{ current_config.get('top_title', '') }}" required>
                         </div>
 
-                        <button type="submit" class="btn-submit">جاهز للبث 🔥</button>
+                        <button type="submit" class="btn-submit">حفظ الإعدادات 🔥</button>
                     </form>
+
+                    <!-- صندوق المحفوظات الخاص بك فقط -->
+                    <div class="saved-box">
+                        <h4><i class="fa-solid fa-box-archive"></i> صندوق المحفوظات (خاص بـ {{ user['username'] }})</h4>
+                        <div class="saved-item">
+                            <span style="color: var(--text-muted);">روم التنبيه المحفوظ:</span>
+                            <span>{{ current_config.get('channel_id', 'لا يوجد') }}</span>
+                        </div>
+                        <div class="saved-item">
+                            <span style="color: var(--text-muted);">عنوان التنبيه المحفوظ:</span>
+                            <span>{{ current_config.get('top_title', 'لا يوجد') }}</span>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
