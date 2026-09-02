@@ -11,165 +11,251 @@
             padding: 0;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
+
         body {
-            background-color: #1a1a1a;
+            background-color: #141414;
             color: #ffffff;
             display: flex;
-            min-height: 100vh;
-        }
-        .sidebar {
-            width: 250px;
-            background-color: #121212;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-        }
-        .sidebar h2 {
-            color: #ff0050;
-            margin-bottom: 30px;
-            font-size: 20px;
-        }
-        .menu-item {
-            display: block;
-            padding: 12px 15px;
-            color: #aaa;
-            text-decoration: none;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            transition: 0.3s;
-        }
-        .menu-item:hover, .menu-item.active {
-            background-color: #2a2a2a;
-            color: #fff;
-        }
-        .logout-btn {
-            background-color: #ff0050;
-            color: white;
-            text-align: center;
-            padding: 10px;
-            border-radius: 8px;
-            text-decoration: none;
-            font-weight: bold;
-            display: block;
-            margin-top: 20px;
-        }
-        .logout-btn:hover {
-            background-color: #e00047;
-        }
-        .content {
-            flex: 1;
-            padding: 40px;
-            display: flex;
             justify-content: center;
-            align-items: flex-start;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
         }
-        .card {
-            background: #242424;
-            padding: 30px;
-            border-radius: 12px;
+
+        .container {
             width: 100%;
-            max-width: 500px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-            border: 1px solid #333;
+            max-width: 550px;
+            background: #1f1f23;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            border: 1px solid #2d2d35;
         }
-        .card h3 {
-            margin-bottom: 20px;
-            color: #00f2fe;
+
+        h1 {
+            text-align: center;
+            font-size: 22px;
+            margin-bottom: 25px;
+            color: #ff0050;
             display: flex;
             align-items: center;
-            gap: 10px;
+            justify-content: center;
+            gap: 8px;
         }
-        .form-group {
-            margin-bottom: 18px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            color: #ccc;
-            font-size: 14px;
-        }
-        .form-control {
-            width: 100%;
-            padding: 12px;
-            background-color: #1a1a1a;
-            border: 1px solid #444;
+
+        .card {
+            background: #26262c;
             border-radius: 8px;
-            color: #fff;
-            font-size: 14px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #32323a;
         }
-        .form-control:focus {
-            outline: none;
-            border-color: #00f2fe;
-        }
-        .btn-submit {
-            width: 100%;
-            padding: 12px;
-            background: linear-gradient(90deg, #ff0050, #00f2fe);
-            border: none;
-            border-radius: 8px;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
+
+        .card-title {
             font-size: 16px;
-            transition: 0.3s;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #ffffff;
         }
-        .btn-submit:hover {
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            color: #aaaaaa;
+            margin-bottom: 6px;
+        }
+
+        select, input {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 6px;
+            border: 1px solid #3e3e48;
+            background-color: #141414;
+            color: #ffffff;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        select:focus, input:focus {
+            border-color: #ff0050;
+        }
+
+        button {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 6px;
+            background: linear-gradient(90deg, #ff0050, #00f2fe);
+            color: #ffffff;
+            font-weight: bold;
+            font-size: 15px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        button:hover {
             opacity: 0.9;
         }
+
+        .saved-box {
+            background: #18181b;
+            border: 1px solid #27272a;
+            border-radius: 6px;
+            padding: 12px;
+            margin-top: 10px;
+        }
+
+        .saved-item {
+            font-size: 13px;
+            color: #00ffcc;
+            margin-bottom: 4px;
+        }
+
+        .alert {
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 15px;
+            display: none;
+            font-size: 13px;
+            text-align: center;
+        }
+        .alert-success { background: #1b4332; color: #2ec4b6; }
+        .alert-error { background: #4a1525; color: #ff4d6d; }
     </style>
 </head>
 <body>
 
-    <div class="sidebar">
-        <div>
-            <h2>تنبيهات البث</h2>
-            <a href="/" class="menu-item active">إضافة تنبيه</a>
-        </div>
-        
-        <div>
-            {% if user %}
-                <p style="color: #888; margin-bottom: 10px;">أهلاً، {{ user['username'] }}</p>
-                <!-- رابط تسجيل الخروج الفعلي المربوط بالمسار /logout -->
-                <a href="/logout" class="logout-btn">تسجيل الخروج</a>
-            {% else %}
-                <a href="/login" class="logout-btn" style="background-color: #5865F2;">تسجيل الدخول بالديسكورد</a>
-            {% endif %}
-        </div>
+<div class="container">
+    <h1>📌 إعدادات التنبيهات</h1>
+
+    <div class="card">
+        <form id="configForm">
+            <div class="form-group">
+                <label>السيرفر المستهدف:</label>
+                <select id="guild_id" required>
+                    <option value="">جاري تحميل السيرفرات...</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>حساب التيك توك (TikTok Username):</label>
+                <input type="text" id="tiktok_username" placeholder="مثال: 2vce4" required>
+            </div>
+
+            <div class="form-group">
+                <label>رقم روم التنبيهات (Channel ID):</label>
+                <input type="text" id="channel_id" placeholder="مثال: 1538986763622813766" required>
+            </div>
+
+            <div class="form-group">
+                <label>عنوان التنبيه:</label>
+                <input type="text" id="message_title" placeholder="مثال: بدأ بث حياكم!" required>
+            </div>
+
+            <button type="submit">حفظ الإعدادات 💾</button>
+        </form>
+
+        <div id="statusAlert" class="alert"></div>
     </div>
 
-    <div class="content">
-        <div class="card">
-            <h3>إضافة تنبيه جديد</h3>
-            <form action="/add_alert" method="POST">
-                
-                <div class="form-group">
-                    <label for="guild_id">اختر السيرفر (السيرفرات برتبتك فقط):</label>
-                    <select name="guild_id" id="guild_id" class="form-control" required>
-                        {% if guilds %}
-                            {% for guild in guilds %}
-                                <option value="{{ guild['id'] }}">{{ guild['name'] }}</option>
-                            {% endfor %}
-                        {% else %}
-                            <option value="">لا توجد سيرفرات تملك فيها صلاحيات أدمن</option>
-                        {% endif %}
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="channel_id">معرف روم الديسكورد (Channel ID):</label>
-                    <input type="text" name="channel_id" id="channel_id" class="form-control" placeholder="أدخل رقم روم الإشعارات..." required>
-                </div>
-
-                <div class="form-group">
-                    <label for="tiktok_username">يوزر التيك توك (بدون @):</label>
-                    <input type="text" name="tiktok_username" id="tiktok_username" class="form-control" placeholder="مثال: 2vce4" required>
-                </div>
-
-                <button type="submit" class="btn-submit">حفظ التنبيه</button>
-            </form>
+    <div class="card">
+        <div class="card-title">📥 صندوق المحفوظات</div>
+        <div class="saved-box" id="savedConfigBox">
+            <div class="saved-item">جاري جلب البيانات...</div>
         </div>
     </div>
+</div>
+
+<script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+
+    async function loadGuildsAndData() {
+        if (!token) return;
+        try {
+            const res = await fetch(`/api/guilds?token=${token}`);
+            const data = await res.json();
+            
+            const select = document.getElementById('guild_id');
+            select.innerHTML = '<option value="">اختر السيرفر...</option>';
+            
+            if (data.guilds) {
+                data.guilds.forEach(g => {
+                    select.innerHTML += `<option value="${g.id}">${g.name}</option>`;
+                });
+            }
+
+            loadSavedConfig();
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    async function loadSavedConfig() {
+        try {
+            const res = await fetch(`/api/config?token=${token}`);
+            const config = await res.json();
+            const box = document.getElementById('savedConfigBox');
+            
+            if (config && Object.keys(config).length > 0) {
+                box.innerHTML = `
+                    <div class="saved-item"><b>الحساب:</b> @${config.tiktok_username || 'غير محدد'}</div>
+                    <div class="saved-item"><b>الروم:</b> ${config.channel_id || 'غير محدد'}</div>
+                    <div class="saved-item"><b>العنوان:</b> ${config.message_title || 'غير محدد'}</div>
+                `;
+                if(config.tiktok_username) document.getElementById('tiktok_username').value = config.tiktok_username;
+                if(config.channel_id) document.getElementById('channel_id').value = config.channel_id;
+                if(config.message_title) document.getElementById('message_title').value = config.message_title;
+            } else {
+                box.innerHTML = '<div class="saved-item" style="color: #888;">لا توجد إعدادات محفوظة حالياً</div>';
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    document.getElementById('configForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const showAlert = (msg, isSuccess) => {
+            const el = document.getElementById('statusAlert');
+            el.className = `alert ${isSuccess ? 'alert-success' : 'alert-error'}`;
+            el.innerText = msg;
+            el.style.display = 'block';
+            setTimeout(() => el.style.display = 'none', 4000);
+        };
+
+        const payload = {
+            guild_id: document.getElementById('guild_id').value,
+            tiktok_username: document.getElementById('tiktok_username').value.replace('@', '').trim(),
+            channel_id: document.getElementById('channel_id').value.trim(),
+            message_title: document.getElementById('message_title').value.trim()
+        };
+
+        try {
+            const res = await fetch(`/api/config?token=${token}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const resData = await res.json();
+            if (res.ok) {
+                showAlert('تم حفظ الإعدادات بنجاح! ✅', true);
+                loadSavedConfig();
+            } else {
+                showAlert(resData.error || 'حدث خطأ أثناء الحفظ', false);
+            }
+        } catch (err) {
+            showAlert('فشل الاتصال بالسيرفر', false);
+        }
+    });
+
+    loadGuildsAndData();
+</script>
 
 </body>
 </html>
