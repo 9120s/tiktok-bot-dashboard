@@ -2,7 +2,9 @@ import os
 import json
 import threading
 import requests
-from flask import Flask, redirect, session, request, render_template_string
+import jwt
+from datetime import datetime, timedelta
+from flask import Flask, redirect, request, render_template_string
 import discord
 from discord.ext import commands
 from waitress import serve
@@ -14,10 +16,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 
 app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
-app.secret_key = os.environ.get("SECRET_KEY", "mysecretkey12345")
-
-app.config['SESSION_COOKIE_SAMESITE'] = 'None'
-app.config['SESSION_COOKIE_SECURE'] = True
+SECRET_KEY = os.environ.get("SECRET_KEY", "mysecretkey12345")
 
 CLIENT_ID = os.environ.get("CLIENT_ID") or os.environ.get("DISCORD_CLIENT_ID", "")
 CLIENT_SECRET = os.environ.get("CLIENT_SECRET") or os.environ.get("DISCORD_CLIENT_SECRET", "")
@@ -48,6 +47,20 @@ def save_configs():
 
 GUILDS_CONFIG = load_configs()
 
+def create_token(user_data, guilds):
+    payload = {
+        'user': user_data,
+        'guilds': guilds,
+        'exp': datetime.utcnow() + timedelta(days=7)
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm='HS256')
+
+def decode_token(token):
+    try:
+        return jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+    except Exception:
+        return None
+
 # --------------------------------------------------
 # 2. إعدادات بوت ديسكورد (Discord Bot)
 # --------------------------------------------------
@@ -68,7 +81,7 @@ def run_bot():
         print("Error: BOT_TOKEN is missing!")
 
 # --------------------------------------------------
-# 3. لوحة التحكم بتصميم القائمة الجانبية
+# 3. واجهة لوحة التحكم
 # --------------------------------------------------
 
 DASHBOARD_HTML = """
@@ -268,10 +281,9 @@ DASHBOARD_HTML = """
             <button class="close-btn" onclick="toggleMenu()"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <ul class="nav-links">
-            <li><a href="#" class="active" onclick="switchTab('settings')"><i class="fa-solid fa-gear"></i> الإعدادات العامة</a></li>
+            <li><a href="#" class="active" onclick="switchTab('settings')"><i class="fa-solid fa-bell"></i> إعدادات البث والتنبيهات</a></li>
             <li><a href="#" onclick="switchTab('top3')"><i class="fa-solid fa-trophy"></i> أفضل ثوالث (Top Streamers)</a></li>
             
-            <!-- الجزء السفلي: الخط الفاصل، زر الديسكورد، وزر الخروج -->
             <div class="sidebar-footer">
                 <li>
                     <a href="{{ server_invite }}" target="_blank" class="discord-btn-link">
@@ -279,7 +291,7 @@ DASHBOARD_HTML = """
                     </a>
                 </li>
                 {% if logged_in %}
-                    <li><a href="/logout" style="color: #ff4757;"><i class="fa-solid fa-right-from-bracket"></i> تسجيل الخروج</a></li>
+                    <li><a href="#" onclick="logout()" style="color: #ff4757;"><i class="fa-solid fa-right-from-bracket"></i> تسجيل الخروج</a></li>
                 {% endif %}
             </div>
         </ul>
@@ -295,8 +307,9 @@ DASHBOARD_HTML = """
         {% else %}
             <div id="settings" class="tab-content active">
                 <div class="card">
-                    <h2 style="margin-bottom: 20px;"><i class="fa-solid fa-sliders"></i> إعدادات التنبيهات</h2>
+                    <h2 style="margin-bottom: 20px;"><i class="fa-solid fa-bell" style="color: var(--accent-color);"></i> إعدادات التنبيهات</h2>
                     <form action="/save-settings" method="POST">
+                        <input type="hidden" name="token" value="{{ token }}">
                         <div class="form-group">
                             <label>السيرفر المستهدف:</label>
                             <select name="guild_id" class="form-control">
@@ -316,7 +329,7 @@ DASHBOARD_HTML = """
                             <input type="text" name="top_title" class="form-control" placeholder="مثال: البث مباشر الآن!">
                         </div>
 
-                        <button type="submit" class="btn-submit">حفظ الإعدادات</button>
+                        <button type="submit" class="btn-submit">جاهز للبث 🔥</button>
                     </form>
                 </div>
             </div>
@@ -334,6 +347,23 @@ DASHBOARD_HTML = """
     </div>
 
     <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        const tokenParam = urlParams.get('token');
+
+        if (tokenParam) {
+            localStorage.setItem('bot_token', tokenParam);
+        } else {
+            const savedToken = localStorage.getItem('bot_token');
+            if (savedToken && !window.location.search.includes('logout=1')) {
+                window.location.href = '/?token=' + savedToken;
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('bot_token');
+            window.location.href = '/?logout=1';
+        }
+
         function toggleMenu() {
             document.getElementById('sidebar').classList.toggle('active');
             document.getElementById('overlay').classList.toggle('active');
@@ -354,10 +384,27 @@ DASHBOARD_HTML = """
 
 @app.route('/')
 def home():
-    logged_in = 'user' in session
-    user = session.get('user', None)
-    guilds = session.get('guilds', [])
-    return render_template_string(DASHBOARD_HTML, logged_in=logged_in, user=user, guilds=guilds, server_invite=DISCORD_SERVER_INVITE)
+    token = request.args.get('token')
+    payload = decode_token(token) if token else None
+
+    if payload:
+        logged_in = True
+        user = payload.get('user')
+        guilds = payload.get('guilds', [])
+    else:
+        logged_in = False
+        user = None
+        guilds = []
+        token = ""
+
+    return render_template_string(
+        DASHBOARD_HTML, 
+        logged_in=logged_in, 
+        user=user, 
+        guilds=guilds, 
+        token=token,
+        server_invite=DISCORD_SERVER_INVITE
+    )
 
 @app.route('/login')
 def login():
@@ -398,21 +445,26 @@ def callback():
                 if (permissions & 0x8) == 0x8 or g.get('owner', False):
                     filtered_guilds.append({'id': str(g['id']), 'name': g['name'], 'icon': g.get('icon')})
 
-        session['user'] = {'id': user_data.get('id'), 'username': user_data.get('username'), 'avatar': user_data.get('avatar')}
-        session['guilds'] = filtered_guilds
-        return redirect('/')
+        user_info = {'id': user_data.get('id'), 'username': user_data.get('username'), 'avatar': user_data.get('avatar')}
+        
+        jwt_token = create_token(user_info, filtered_guilds)
+        return redirect(f'/?token={jwt_token}')
 
     except Exception:
         return redirect('/login')
 
 @app.route('/save-settings', methods=['POST'])
 def save_settings():
-    if 'user' not in session:
+    token = request.form.get('token')
+    payload = decode_token(token) if token else None
+
+    if not payload:
         return redirect('/login')
 
     guild_id = request.form.get('guild_id')
-    if not guild_id and session.get('guilds'):
-        guild_id = session['guilds'][0]['id']
+    guilds = payload.get('guilds', [])
+    if not guild_id and guilds:
+        guild_id = guilds[0]['id']
 
     if guild_id:
         GUILDS_CONFIG[str(guild_id)] = {
@@ -420,14 +472,9 @@ def save_settings():
             "top_title": request.form.get('top_title')
         }
         save_configs()
-        return redirect(f'/?guild_id={guild_id}')
+        return redirect(f'/?token={token}&guild_id={guild_id}')
 
-    return redirect('/')
-
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect('/')
+    return redirect(f'/?token={token}')
 
 # --------------------------------------------------
 # 4. تشغيل السيرفر والبوت
