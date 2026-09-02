@@ -75,9 +75,14 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            transition: background 0.2s;
         }
 
-        /* القائمة الجانبية المنسدلة (تفتح عند الضغط على الثلاث نقاط) */
+        .btn-login:hover {
+            background-color: #4752C4;
+        }
+
+        /* القائمة الجانبية (تفتح عند الضغط على الثلاث نقاط) */
         .sidebar {
             position: fixed;
             top: 70px;
@@ -218,7 +223,7 @@
             </div>
         </div>
         <div>
-            <a href="/login" class="btn-login">
+            <a href="https://discord.com/oauth2/authorize?client_id=1544289467853045861&response_type=code&redirect_uri=https%3A%2F%2Ftiktok-bot-2s2-dashboard.onrender.com%2Fcallback&scope=identify+guilds" class="btn-login">
                 <i class="fa-brands fa-discord"></i> تسجيل الدخول
             </a>
         </div>
