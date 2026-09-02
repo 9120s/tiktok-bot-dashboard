@@ -10,7 +10,7 @@ app = Flask(__name__)
 DISCORD_CLIENT_ID = os.getenv("CLIENT_ID", os.getenv("DISCORD_CLIENT_ID", "1544289467853045861")).strip()
 DISCORD_CLIENT_SECRET = os.getenv("CLIENT_SECRET", os.getenv("DISCORD_CLIENT_SECRET", "")).strip()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
-SERVER_INVITE_URL = os.getenv("SERVER_INVITE_URL", "https://discord.gg/YOUR_INVITE_CODE").strip()
+SERVER_INVITE_URL = os.getenv("SERVER_INVITE_URL", "https://discord.gg/TQUFzyxM7").strip()
 
 SAVED_CONFIGS = {}
 active_monitors = {}
