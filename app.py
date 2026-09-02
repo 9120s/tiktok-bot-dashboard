@@ -130,9 +130,9 @@ HTML_LAYOUT = """
         }
         .nav-item a:hover, .nav-item.active a { background: #27272a; color: var(--tiktok-cyan); }
 
-        .saved-servers-list { list-style: none; display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
+        .saved-servers-list { list-style: none; display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
         .saved-server-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #18181b; border-radius: 6px; font-size: 0.85rem; border: 1px solid var(--border-color); }
-        .saved-server-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px; }
+        .saved-server-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px; }
 
         .top-3-container { display: flex; flex-direction: column; gap: 10px; margin-bottom: 1.5rem; }
         .top-card { background: #18181b; border: 1px solid var(--border-color); border-radius: 12px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; }
@@ -215,11 +215,15 @@ HTML_LAYOUT = """
             <h2>إدارة التنبيهات</h2>
             <p class="desc">اختر السيرفر وقم بإعداد تنبيهات البث المباشر</p>
 
-            <div id="top3Section" style="display:none;">
-                <div class="section-title" style="text-align:center; font-size:1rem; margin-bottom:10px;">
+            <div id="top3Section">
+                <div class="section-title" style="text-align:center; font-size:1rem; margin-bottom:12px; color: var(--tiktok-cyan);">
                     👑 أفضل ثوالث في البثوث المحفوظة
                 </div>
-                <div class="top-3-container" id="top3Container"></div>
+                <div class="top-3-container" id="top3Container">
+                    <div style="text-align:center; color:var(--text-muted); font-size:0.85rem; padding: 10px;">
+                        جاري تحميل البيانات...
+                    </div>
+                </div>
             </div>
 
             <div id="content">
@@ -232,28 +236,23 @@ HTML_LAYOUT = """
         const urlParams = new URLSearchParams(window.location.search);
         const token = urlParams.get('token');
 
-        // جلب قائمة السيرفرات المحفوظة وأفضل ثوالث
         fetch('/api/saved-configs')
             .then(res => res.json())
             .then(data => {
                 const menu = document.getElementById('savedServersMenu');
                 const top3 = document.getElementById('top3Container');
-                const top3Section = document.getElementById('top3Section');
 
                 if (data.configs && data.configs.length > 0) {
                     menu.innerHTML = '';
                     top3.innerHTML = '';
-                    top3Section.style.display = 'block';
 
                     data.configs.forEach((item, index) => {
-                        // إضافة للقائمة الجانبية
                         menu.innerHTML += `
                             <li class="saved-server-item">
                                 <span><i class="fa-solid fa-hashtag"></i> ${item.guild_id}</span>
                                 <strong style="color:var(--tiktok-cyan)">@${item.tiktok_user}</strong>
                             </li>`;
 
-                        // إضافة لأفضل ثوالث (أول 3)
                         if (index < 3) {
                             top3.innerHTML += `
                                 <div class="top-card">
@@ -267,7 +266,8 @@ HTML_LAYOUT = """
                         }
                     });
                 } else {
-                    menu.innerHTML = '<li style="color:var(--text-muted); font-size:0.8rem; text-align:center;">لا توجد سيرفرات محفوظة</li>';
+                    menu.innerHTML = '<li style="color:var(--text-muted); font-size:0.8rem; text-align:center; padding:5px;">لا توجد سيرفرات محفوظة</li>';
+                    top3.innerHTML = '<div style="text-align:center; color:var(--text-muted); font-size:0.85rem; background:#18181b; padding:12px; border-radius:8px; border:1px solid var(--border-color);">قم بإضافة إعدادات سيرفر لأول مرة لتدخل في قائمة أفضل ثوالث 🚀</div>';
                 }
             });
 
@@ -282,7 +282,7 @@ HTML_LAYOUT = """
                     if (data.guilds && data.guilds.length > 0) {
                         let html = `
                             <div class="form-group">
-                                <label>اختر السيرفر:</label>
+                                <label>اختر السيرفر الإداري (العدد: ${data.guilds.length}):</label>
                                 <select id="guildSelect">`;
                         data.guilds.forEach(g => { html += `<option value="${g.id}">${g.name}</option>`; });
                         html += `</select></div>
@@ -295,6 +295,8 @@ HTML_LAYOUT = """
 
                             <div id="responseMsg"></div>`;
                         document.getElementById('content').innerHTML = html;
+                    } else {
+                        document.getElementById('content').innerHTML = '<div class="error">لم يتم العثور على سيرفرات لديك فيها صلاحيات إدارة!</div>';
                     }
                 });
         }
@@ -395,10 +397,32 @@ def get_guilds():
     user_token = request.args.get('token')
     guilds_list = []
     if user_token:
-        res = requests.get('https://discord.com/api/v10/users/@me/guilds', headers={'Authorization': f'Bearer {user_token}'})
-        if res.status_code == 200:
-            for g in res.json():
-                guilds_list.append({"id": str(g['id']), "name": g['name']})
+        after_id = 0
+        while True:
+            url = 'https://discord.com/api/v10/users/@me/guilds?limit=200'
+            if after_id:
+                url += f'&after={after_id}'
+                
+            res = requests.get(url, headers={'Authorization': f'Bearer {user_token}'})
+            if res.status_code == 200:
+                data = res.json()
+                if not data:
+                    break
+                for g in data:
+                    # فحص الصلاحيات: هل المستخدم مالك أو يملك Administrator (0x8) أو Manage Server (0x20)
+                    permissions = int(g.get('permissions', 0))
+                    is_owner = g.get('owner', False)
+                    is_admin = (permissions & 0x8) == 0x8
+                    can_manage = (permissions & 0x20) == 0x20
+
+                    if is_owner or is_admin or can_manage:
+                        guilds_list.append({"id": str(g['id']), "name": g['name']})
+
+                after_id = data[-1]['id']
+            else:
+                break
+                
+    guilds_list.sort(key=lambda x: x['name'].lower())
     return jsonify({"guilds": guilds_list})
 
 @app.route('/api/saved-configs')
