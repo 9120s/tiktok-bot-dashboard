@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لوحة التحكم - تنبيهات تيك توك</title>
+    <title>لوحة تحكم بوت التيك توك</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         * {
             box-sizing: border-box;
@@ -13,68 +14,145 @@
         }
 
         body {
-            background-color: #141414;
+            background-color: #0f0f12;
             color: #ffffff;
             display: flex;
-            justify-content: center;
-            align-items: center;
             min-height: 100vh;
+        }
+
+        /* القائمة الجانبية */
+        .sidebar {
+            width: 260px;
+            background-color: #16161a;
+            border-left: 1px solid #232329;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
             padding: 20px;
         }
 
-        .container {
-            width: 100%;
-            max-width: 550px;
-            background: #1f1f23;
-            border-radius: 12px;
-            padding: 30px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-            border: 1px solid #2d2d35;
-        }
-
-        h1 {
-            text-align: center;
-            font-size: 22px;
-            margin-bottom: 25px;
-            color: #ff0050;
+        .brand {
             display: flex;
             align-items: center;
-            justify-content: center;
+            gap: 12px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #ff0050;
+            margin-bottom: 30px;
+        }
+
+        .nav-list {
+            list-style: none;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: #a0a0ab;
+            text-decoration: none;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .nav-item:hover, .nav-item.active {
+            background-color: #222228;
+            color: #ffffff;
+        }
+
+        .nav-item i {
+            font-size: 18px;
+        }
+
+        /* المحتوى الرئيسي */
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* الشريط العلوي */
+        .header {
+            height: 70px;
+            background-color: #16161a;
+            border-bottom: 1px solid #232329;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 30px;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .btn-login {
+            background-color: #5865F2;
+            color: white;
+            padding: 10px 18px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
             gap: 8px;
+            transition: background 0.2s;
+        }
+
+        .btn-login:hover {
+            background-color: #4752C4;
+        }
+
+        /* منطقة البطاقات والمحتوى */
+        .container {
+            padding: 30px;
+            max-width: 800px;
+            margin: 0 auto;
+            width: 100%;
         }
 
         .card {
-            background: #26262c;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 20px;
-            border: 1px solid #32323a;
+            background: #18181c;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 25px;
+            border: 1px solid #26262e;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         }
 
         .card-title {
-            font-size: 16px;
+            font-size: 18px;
             font-weight: bold;
-            margin-bottom: 15px;
+            margin-bottom: 20px;
             color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .form-group {
-            margin-bottom: 15px;
+            margin-bottom: 18px;
         }
 
         label {
             display: block;
             font-size: 13px;
-            color: #aaaaaa;
-            margin-bottom: 6px;
+            color: #a0a0ab;
+            margin-bottom: 8px;
         }
 
         select, input {
             width: 100%;
-            padding: 10px 12px;
-            border-radius: 6px;
-            border: 1px solid #3e3e48;
-            background-color: #141414;
+            padding: 12px 14px;
+            border-radius: 8px;
+            border: 1px solid #2d2d38;
+            background-color: #0f0f12;
             color: #ffffff;
             font-size: 14px;
             outline: none;
@@ -85,11 +163,11 @@
             border-color: #ff0050;
         }
 
-        button {
+        button.btn-submit {
             width: 100%;
-            padding: 12px;
+            padding: 14px;
             border: none;
-            border-radius: 6px;
+            border-radius: 8px;
             background: linear-gradient(90deg, #ff0050, #00f2fe);
             color: #ffffff;
             font-weight: bold;
@@ -98,85 +176,123 @@
             transition: opacity 0.2s;
         }
 
-        button:hover {
+        button.btn-submit:hover {
             opacity: 0.9;
         }
 
         .saved-box {
-            background: #18181b;
-            border: 1px solid #27272a;
-            border-radius: 6px;
-            padding: 12px;
-            margin-top: 10px;
+            background: #111114;
+            border: 1px solid #23232a;
+            border-radius: 8px;
+            padding: 15px;
         }
 
         .saved-item {
-            font-size: 13px;
-            color: #00ffcc;
-            margin-bottom: 4px;
+            font-size: 14px;
+            color: #20e3b2;
+            margin-bottom: 6px;
         }
 
         .alert {
-            padding: 10px;
-            border-radius: 6px;
+            padding: 12px;
+            border-radius: 8px;
             margin-top: 15px;
             display: none;
-            font-size: 13px;
+            font-size: 14px;
             text-align: center;
         }
-        .alert-success { background: #1b4332; color: #2ec4b6; }
-        .alert-error { background: #4a1525; color: #ff4d6d; }
+        .alert-success { background: #133a27; color: #2ecc71; border: 1px solid #1e563a; }
+        .alert-error { background: #421822; color: #ff4d6d; border: 1px solid #632231; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>📌 إعدادات التنبيهات</h1>
-
-    <div class="card">
-        <form id="configForm">
-            <div class="form-group">
-                <label>السيرفر المستهدف:</label>
-                <select id="guild_id" required>
-                    <option value="">جاري تحميل السيرفرات...</option>
-                </select>
+    <!-- القائمة الجانبية -->
+    <aside class="sidebar">
+        <div>
+            <div class="brand">
+                <i class="fa-brands fa-tiktok"></i>
+                <span>TikTok Bot</span>
             </div>
-
-            <div class="form-group">
-                <label>حساب التيك توك (TikTok Username):</label>
-                <input type="text" id="tiktok_username" placeholder="مثال: 2vce4" required>
-            </div>
-
-            <div class="form-group">
-                <label>رقم روم التنبيهات (Channel ID):</label>
-                <input type="text" id="channel_id" placeholder="مثال: 1538986763622813766" required>
-            </div>
-
-            <div class="form-group">
-                <label>عنوان التنبيه:</label>
-                <input type="text" id="message_title" placeholder="مثال: بدأ بث حياكم!" required>
-            </div>
-
-            <button type="submit">حفظ الإعدادات 💾</button>
-        </form>
-
-        <div id="statusAlert" class="alert"></div>
-    </div>
-
-    <div class="card">
-        <div class="card-title">📥 صندوق المحفوظات</div>
-        <div class="saved-box" id="savedConfigBox">
-            <div class="saved-item">جاري جلب البيانات...</div>
+            <ul class="nav-list">
+                <li><a href="#" class="nav-item active"><i class="fa-solid fa-sliders"></i> الإعدادات</a></li>
+                <li><a href="#" class="nav-item"><i class="fa-solid fa-server"></i> السيرفرات</a></li>
+                <li><a href="#" class="nav-item"><i class="fa-solid fa-bell"></i> السجلات</a></li>
+            </ul>
         </div>
-    </div>
-</div>
+        <div>
+            <a href="#" class="nav-item"><i class="fa-solid fa-gear"></i> إعدادات عامة</a>
+        </div>
+    </aside>
+
+    <!-- المحتوى الرئيسي -->
+    <main class="main-content">
+        <!-- الشريط العلوي -->
+        <header class="header">
+            <div><b>لوحة التحكم العامة</b></div>
+            <div class="user-profile">
+                <a href="/login" class="btn-login" id="loginBtn">
+                    <i class="fa-brands fa-discord"></i> تسجيل الدخول عبر Discord
+                </a>
+            </div>
+        </header>
+
+        <!-- Container -->
+        <div class="container">
+            <div class="card">
+                <div class="card-title">
+                    <i class="fa-solid fa-gear" style="color: #ff0050;"></i> إعدادات التنبيه المباشر
+                </div>
+                <form id="configForm">
+                    <div class="form-group">
+                        <label>السيرفر المستهدف:</label>
+                        <select id="guild_id" required>
+                            <option value="">جاري تحميل السيرفرات...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label>حساب التيك توك (TikTok Username):</label>
+                        <input type="text" id="tiktok_username" placeholder="مثال: 2vce4" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>رقم روم التنبيهات (Channel ID):</label>
+                        <input type="text" id="channel_id" placeholder="مثال: 1538986763622813766" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label>عنوان التنبيه:</label>
+                        <input type="text" id="message_title" placeholder="مثال: بدأ بث حياكم!" required>
+                    </div>
+
+                    <button type="submit" class="btn-submit">حفظ الإعدادات 💾</button>
+                </form>
+
+                <div id="statusAlert" class="alert"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-title">
+                    <i class="fa-solid fa-box-archive" style="color: #00f2fe;"></i> الإعدادات المحفوظة
+                </div>
+                <div class="saved-box" id="savedConfigBox">
+                    <div class="saved-item" style="color: #888;">جاري جلب البيانات...</div>
+                </div>
+            </div>
+        </div>
+    </main>
 
 <script>
     const urlParams = new URLSearchParams(window.location.search);
     const token = urlParams.get('token');
 
     async function loadGuildsAndData() {
-        if (!token) return;
+        if (!token) {
+            document.getElementById('guild_id').innerHTML = '<option value="">يرجى تسجيل الدخول أولاً</option>';
+            return;
+        }
+
         try {
             const res = await fetch(`/api/guilds?token=${token}`);
             const data = await res.json();
@@ -184,10 +300,12 @@
             const select = document.getElementById('guild_id');
             select.innerHTML = '<option value="">اختر السيرفر...</option>';
             
-            if (data.guilds) {
+            if (data.guilds && data.guilds.length > 0) {
                 data.guilds.forEach(g => {
                     select.innerHTML += `<option value="${g.id}">${g.name}</option>`;
                 });
+            } else {
+                select.innerHTML = '<option value="">لم يتم العثور على سيرفرات</option>';
             }
 
             loadSavedConfig();
