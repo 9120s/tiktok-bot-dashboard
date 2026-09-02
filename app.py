@@ -16,6 +16,14 @@ HTML_LAYOUT = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>لوحة التحكم | TikTok Live</title>
+    
+    <!-- إعدادات تحويل الموقع لتطبيق (PWA) -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#121212">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="TikTok Dashboard">
+
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
         :root {
@@ -87,6 +95,7 @@ HTML_LAYOUT = """
             border-radius: 8px;
             font-weight: 600;
             transition: all 0.3s ease;
+            cursor: pointer;
         }
 
         .nav-item a:hover, .nav-item.active a {
@@ -101,9 +110,12 @@ HTML_LAYOUT = """
             box-shadow: 0 4px 15px rgba(254, 44, 85, 0.4);
         }
 
-        .join-server-btn:hover {
-            opacity: 0.9;
-            transform: scale(1.02);
+        .install-app-btn {
+            background: rgba(37, 244, 238, 0.1);
+            color: var(--tiktok-cyan) !important;
+            border: 1px solid var(--tiktok-cyan);
+            margin-bottom: 8px;
+            display: none;
         }
 
         /* Main Content */
@@ -128,17 +140,8 @@ HTML_LAYOUT = """
             text-align: right;
         }
 
-        .card h2 {
-            text-align: center;
-            font-size: 1.8rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .card p.desc {
-            text-align: center;
-            color: var(--text-muted);
-            margin-bottom: 2rem;
-        }
+        .card h2 { text-align: center; font-size: 1.8rem; margin-bottom: 0.5rem; }
+        .card p.desc { text-align: center; color: var(--text-muted); margin-bottom: 2rem; }
 
         .btn-tiktok {
             display: inline-flex;
@@ -160,21 +163,8 @@ HTML_LAYOUT = """
             margin-top: 15px;
         }
 
-        .btn-tiktok:hover {
-            background: #e02649;
-        }
-
-        .form-group {
-            margin-bottom: 1.2rem;
-        }
-
-        .form-group label {
-            display: block;
-            margin-bottom: 6px;
-            font-weight: bold;
-            font-size: 0.95rem;
-            color: var(--text-main);
-        }
+        .form-group { margin-bottom: 1.2rem; }
+        .form-group label { display: block; margin-bottom: 6px; font-weight: bold; font-size: 0.95rem; }
 
         input[type="text"], select {
             width: 100%;
@@ -185,11 +175,6 @@ HTML_LAYOUT = """
             color: #fff;
             font-size: 0.95rem;
             outline: none;
-            transition: border-color 0.3s;
-        }
-
-        input[type="text"]:focus, select:focus {
-            border-color: var(--tiktok-cyan);
         }
 
         .status-badge {
@@ -208,23 +193,18 @@ HTML_LAYOUT = """
             color: var(--tiktok-pink);
             background: rgba(254, 44, 85, 0.1);
             border: 1px solid var(--tiktok-pink);
-            padding: 12px;
-            border-radius: 8px;
-            margin-top: 15px;
-            font-size: 0.9rem;
-            text-align: center;
+            padding: 12px; border-radius: 8px; margin-top: 15px; text-align: center;
         }
 
         .success {
             color: #4ade80;
             background: rgba(74, 222, 128, 0.1);
             border: 1px solid #4ade80;
-            padding: 12px;
-            border-radius: 8px;
-            margin-top: 15px;
-            font-size: 0.9rem;
-            text-align: center;
+            padding: 12px; border-radius: 8px; margin-top: 15px; text-align: center;
         }
+
+        .page-section { display: none; }
+        .page-section.active { display: block; }
 
         @media (max-width: 768px) {
             body { flex-direction: column; }
@@ -242,19 +222,22 @@ HTML_LAYOUT = """
                 <span>لوحة التحكم</span>
             </div>
             <ul class="nav-menu">
-                <li class="nav-item active">
-                    <a href="/"><i class="fa-solid fa-house"></i> الرئيسية</a>
+                <li class="nav-item active" id="nav-home">
+                    <a onclick="switchTab('home')"><i class="fa-solid fa-house"></i> الرئيسية</a>
                 </li>
-                <li class="nav-item">
-                    <a href="#"><i class="fa-solid fa-trophy"></i> أفضل ثالث للبثوث</a>
+                <li class="nav-item" id="nav-top">
+                    <a onclick="switchTab('top')"><i class="fa-solid fa-trophy"></i> أفضل ثوالث للبثوث</a>
                 </li>
-                <li class="nav-item">
-                    <a href="#"><i class="fa-solid fa-bookmark"></i> السيرفرات المحفوظة</a>
+                <li class="nav-item" id="nav-saved">
+                    <a onclick="switchTab('saved')"><i class="fa-solid fa-bookmark"></i> السيرفرات المحفوظة</a>
                 </li>
             </ul>
         </div>
 
         <ul class="nav-menu">
+            <li class="nav-item" id="installNavItem">
+                <a id="installBtn" class="install-app-btn"><i class="fa-solid fa-download"></i> تثبيت التطبيق</a>
+            </li>
             <li class="nav-item">
                 <a href="{{ server_invite }}" target="_blank" class="join-server-btn">
                     <i class="fa-brands fa-discord"></i> انضم لسيرفرنا
@@ -264,7 +247,8 @@ HTML_LAYOUT = """
     </aside>
 
     <main class="main-content">
-        <div class="card">
+        <!-- قسم الرئيسية -->
+        <div id="section-home" class="card page-section active">
             <h2>إدارة البوت</h2>
             <p class="desc">قم بتسجيل الدخول لاختيار السيرفر والتحكم بالإعدادات</p>
             
@@ -274,9 +258,65 @@ HTML_LAYOUT = """
                 </a>
             </div>
         </div>
+
+        <!-- قسم أفضل ثوالث للبثوث -->
+        <div id="section-top" class="card page-section">
+            <h2>🏆 أفضل ثوالث للبثوث</h2>
+            <p class="desc">قائمة بـ أفضل البثوث النشطة حالياً</p>
+            <div style="text-align: center; color: var(--text-muted); padding: 20px 0;">
+                <i class="fa-solid fa-fire fa-2x" style="color: var(--tiktok-pink); margin-bottom: 10px;"></i>
+                <p>قريباً سيتم عرض ترتيب البثوث المباشرة هنا!</p>
+            </div>
+        </div>
+
+        <!-- قسم السيرفرات المحفوظة -->
+        <div id="section-saved" class="card page-section">
+            <h2>🔖 السيرفرات المحفوظة</h2>
+            <p class="desc">إدارة السيرفرات التي تم ضبط إعداداتها سابقاً</p>
+            <div id="savedGuildsList" style="text-align: center; color: var(--text-muted); padding: 20px 0;">
+                <i class="fa-solid fa-server fa-2x" style="color: var(--tiktok-cyan); margin-bottom: 10px;"></i>
+                <p>لم يتم حفظ أي سيرفرات بعد.</p>
+            </div>
+        </div>
     </main>
 
     <script>
+        // PWA Script لتثبيت التطبيق
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            const installBtn = document.getElementById('installBtn');
+            installBtn.style.display = 'flex';
+            
+            installBtn.addEventListener('click', () => {
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        installBtn.style.display = 'none';
+                    }
+                    deferredPrompt = null;
+                });
+            });
+        });
+
+        // التنقل بين أقسام القائمة الجانبية
+        function switchTab(tab) {
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
+
+            if (tab === 'home') {
+                document.getElementById('nav-home').classList.add('active');
+                document.getElementById('section-home').classList.add('active');
+            } else if (tab === 'top') {
+                document.getElementById('nav-top').classList.add('active');
+                document.getElementById('section-top').classList.add('active');
+            } else if (tab === 'saved') {
+                document.getElementById('nav-saved').classList.add('active');
+                document.getElementById('section-saved').classList.add('active');
+            }
+        }
+
         const urlParams = new URLSearchParams(window.location.search);
         const token = urlParams.get('token');
         const err = urlParams.get('err');
@@ -334,7 +374,9 @@ HTML_LAYOUT = """
         }
 
         function saveSettings() {
-            const guildId = document.getElementById('guildSelect').value;
+            const guildSelect = document.getElementById('guildSelect');
+            const guildId = guildSelect.value;
+            const guildName = guildSelect.options[guildSelect.selectedIndex].text;
             const tiktokUser = document.getElementById('tiktokUser').value.trim();
             const channelId = document.getElementById('channelId').value.trim();
             const msgDiv = document.getElementById('responseMsg');
@@ -359,6 +401,12 @@ HTML_LAYOUT = """
             .then(data => {
                 if(data.success) {
                     msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-circle-check"></i> تم حفظ إعدادات التنبيهات بنجاح! جاهز للبث🔥</div>';
+                    document.getElementById('savedGuildsList').innerHTML = `
+                        <div style="background:#000; padding:15px; border-radius:8px; border:1px solid var(--tiktok-cyan); text-align:right;">
+                            <p style="color:var(--tiktok-cyan); font-weight:bold;"><i class="fa-solid fa-server"></i> ${guildName}</p>
+                            <p style="font-size:0.85rem; color:var(--text-muted); margin-top:5px;">التيك توك: @${tiktokUser} | الروم: ${channelId}</p>
+                        </div>
+                    `;
                 } else {
                     msgDiv.innerHTML = '<div class="error">حدث خطأ أثناء الحفظ.</div>';
                 }
@@ -371,6 +419,24 @@ HTML_LAYOUT = """
 </body>
 </html>
 """
+
+@app.route('/manifest.json')
+def manifest():
+    return jsonify({
+        "name": "TikTok Dashboard",
+        "short_name": "Dashboard",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#121212",
+        "theme_color": "#fe2c55",
+        "icons": [
+            {
+                "src": "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/svgs/brands/tiktok.svg",
+                "sizes": "512x512",
+                "type": "image/svg+xml"
+            }
+        ]
+    })
 
 def get_redirect_uri():
     redirect_env = os.getenv("REDIRECT_URI", "").strip()
@@ -450,9 +516,7 @@ def save_settings():
     tiktok_user = data.get('tiktok_user')
     channel_id = data.get('channel_id')
 
-    # تجد هنا منطق الحفظ في قاعدة البيانات أو التحديث
     print(f"Saved Config: Guild={guild_id}, TikTok={tiktok_user}, Channel={channel_id}")
-
     return jsonify({"success": True})
 
 if __name__ == '__main__':
