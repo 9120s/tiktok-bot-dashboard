@@ -13,7 +13,6 @@ DISCORD_CLIENT_ID = os.getenv("CLIENT_ID", os.getenv("DISCORD_CLIENT_ID", "15442
 DISCORD_CLIENT_SECRET = os.getenv("CLIENT_SECRET", os.getenv("DISCORD_CLIENT_SECRET", "")).strip()
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 
-# ضع رابط دعوة سيرفر الديسكورد الخاص بك هنا أو في Environment Variables
 SERVER_INVITE_URL = os.getenv("SERVER_INVITE_URL", "https://discord.gg/YOUR_INVITE_CODE").strip()
 
 CONFIG_FILE = "config.json"
@@ -111,9 +110,9 @@ HTML_LAYOUT = """
         body { background-color: var(--bg-main); color: var(--text-main); display: flex; min-height: 100vh; }
 
         .sidebar {
-            width: 260px; background: var(--bg-sidebar); border-left: 1px solid var(--border-color);
+            width: 280px; background: var(--bg-sidebar); border-left: 1px solid var(--border-color);
             display: flex; flex-direction: column; justify-content: space-between; padding: 1.5rem 1rem;
-            position: fixed; top: 0; bottom: 0; right: 0; z-index: 100;
+            position: fixed; top: 0; bottom: 0; right: 0; z-index: 100; overflow-y: auto;
         }
 
         .brand {
@@ -122,27 +121,42 @@ HTML_LAYOUT = """
             text-shadow: 2px 2px var(--tiktok-pink), -2px -2px var(--tiktok-cyan);
         }
 
-        .nav-menu { list-style: none; margin-top: 1.5rem; display: flex; flex-direction: column; gap: 8px; }
+        .section-title { font-size: 0.85rem; text-transform: uppercase; color: var(--text-muted); margin: 1.2rem 0 0.5rem 0; font-weight: bold; letter-spacing: 0.5px; }
+
+        .nav-menu { list-style: none; display: flex; flex-direction: column; gap: 6px; }
         .nav-item a {
-            display: flex; align-items: center; gap: 12px; padding: 12px 16px;
-            color: var(--text-muted); text-decoration: none; border-radius: 8px; font-weight: 600; cursor: pointer;
+            display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+            color: var(--text-muted); text-decoration: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.95rem;
         }
         .nav-item a:hover, .nav-item.active a { background: #27272a; color: var(--tiktok-cyan); }
 
+        .saved-servers-list { list-style: none; display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow-y: auto; }
+        .saved-server-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #18181b; border-radius: 6px; font-size: 0.85rem; border: 1px solid var(--border-color); }
+        .saved-server-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px; }
+
+        .top-3-container { display: flex; flex-direction: column; gap: 10px; margin-bottom: 1.5rem; }
+        .top-card { background: #18181b; border: 1px solid var(--border-color); border-radius: 12px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; }
+        .top-card .rank { font-size: 1.3rem; font-weight: bold; width: 30px; text-align: center; }
+        .top-card:nth-child(1) .rank { color: #ffd700; }
+        .top-card:nth-child(2) .rank { color: #c0c0c0; }
+        .top-card:nth-child(3) .rank { color: #cd7f32; }
+        .top-card .info { flex: 1; margin-right: 12px; }
+        .top-card .info .user { font-weight: bold; color: #fff; }
+        .top-card .info .server-name { font-size: 0.8rem; color: var(--text-muted); }
+
         .join-server-btn {
             background: linear-gradient(45deg, var(--tiktok-pink), var(--tiktok-cyan));
-            color: #000 !important;
-            font-weight: 800 !important;
-            box-shadow: 0 4px 15px rgba(254, 44, 85, 0.4);
+            color: #000 !important; font-weight: 800 !important;
+            box-shadow: 0 4px 15px rgba(254, 44, 85, 0.4); text-align: center; justify-content: center;
         }
 
-        .auth-btn { background: rgba(254, 44, 85, 0.15); color: var(--tiktok-pink) !important; border: 1px solid var(--tiktok-pink); margin-bottom: 8px; }
+        .auth-btn { background: rgba(254, 44, 85, 0.15); color: var(--tiktok-pink) !important; border: 1px solid var(--tiktok-pink); margin-bottom: 8px; text-align: center; justify-content: center; }
         .auth-btn:hover { background: var(--tiktok-pink) !important; color: #fff !important; }
 
-        .main-content { margin-right: 260px; flex: 1; padding: 2.5rem; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
-        .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 2.5rem; width: 100%; max-width: 520px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8); text-align: right; }
+        .main-content { margin-right: 280px; flex: 1; padding: 2.5rem; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+        .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 2.5rem; width: 100%; max-width: 550px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8); text-align: right; }
         .card h2 { text-align: center; font-size: 1.8rem; margin-bottom: 0.5rem; }
-        .card p.desc { text-align: center; color: var(--text-muted); margin-bottom: 2rem; }
+        .card p.desc { text-align: center; color: var(--text-muted); margin-bottom: 1.5rem; }
 
         .btn-tiktok {
             display: inline-flex; align-items: center; justify-content: center; gap: 10px;
@@ -150,12 +164,7 @@ HTML_LAYOUT = """
             font-weight: bold; font-size: 1rem; width: 100%; border: none; cursor: pointer; margin-top: 10px;
         }
 
-        .btn-send-now {
-            background: #25f4ee;
-            color: #000;
-            box-shadow: 0 0 15px rgba(37, 244, 238, 0.4);
-        }
-
+        .btn-send-now { background: #25f4ee; color: #000; box-shadow: 0 0 15px rgba(37, 244, 238, 0.4); }
         .btn-send-now:hover { background: #1ee0da; }
 
         .form-group { margin-bottom: 1.2rem; }
@@ -178,11 +187,18 @@ HTML_LAYOUT = """
     <aside class="sidebar">
         <div>
             <div class="brand"><i class="fa-brands fa-tiktok"></i><span>لوحة التحكم</span></div>
-            <ul class="nav-menu">
+            
+            <ul class="nav-menu" style="margin-top: 1rem;">
                 <li class="nav-item active"><a href="/"><i class="fa-solid fa-house"></i> الرئيسية</a></li>
             </ul>
+
+            <div class="section-title"><i class="fa-solid fa-server"></i> السيرفرات المحفوظة</div>
+            <ul class="saved-servers-list" id="savedServersMenu">
+                <li style="color:var(--text-muted); font-size:0.8rem; text-align:center;">جاري التحميل...</li>
+            </ul>
         </div>
-        <ul class="nav-menu">
+
+        <ul class="nav-menu" style="margin-top: 1.5rem;">
             <li class="nav-item">
                 <a href="/login" class="auth-btn" id="authBtn"><i class="fa-solid fa-right-to-bracket"></i> تسجيل الدخول</a>
             </li>
@@ -196,8 +212,15 @@ HTML_LAYOUT = """
 
     <main class="main-content">
         <div class="card">
-            <h2>إدارة البوت</h2>
-            <p class="desc">قم بتسجيل الدخول لاختيار السيرفر والتحكم بالإعدادات</p>
+            <h2>إدارة التنبيهات</h2>
+            <p class="desc">اختر السيرفر وقم بإعداد تنبيهات البث المباشر</p>
+
+            <div id="top3Section" style="display:none;">
+                <div class="section-title" style="text-align:center; font-size:1rem; margin-bottom:10px;">
+                    👑 أفضل ثوالث في البثوث المحفوظة
+                </div>
+                <div class="top-3-container" id="top3Container"></div>
+            </div>
 
             <div id="content">
                 <a href="/login" class="btn-tiktok"><i class="fa-brands fa-discord"></i> تسجيل الدخول عبر ديسكورد</a>
@@ -208,6 +231,45 @@ HTML_LAYOUT = """
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const token = urlParams.get('token');
+
+        // جلب قائمة السيرفرات المحفوظة وأفضل ثوالث
+        fetch('/api/saved-configs')
+            .then(res => res.json())
+            .then(data => {
+                const menu = document.getElementById('savedServersMenu');
+                const top3 = document.getElementById('top3Container');
+                const top3Section = document.getElementById('top3Section');
+
+                if (data.configs && data.configs.length > 0) {
+                    menu.innerHTML = '';
+                    top3.innerHTML = '';
+                    top3Section.style.display = 'block';
+
+                    data.configs.forEach((item, index) => {
+                        // إضافة للقائمة الجانبية
+                        menu.innerHTML += `
+                            <li class="saved-server-item">
+                                <span><i class="fa-solid fa-hashtag"></i> ${item.guild_id}</span>
+                                <strong style="color:var(--tiktok-cyan)">@${item.tiktok_user}</strong>
+                            </li>`;
+
+                        // إضافة لأفضل ثوالث (أول 3)
+                        if (index < 3) {
+                            top3.innerHTML += `
+                                <div class="top-card">
+                                    <div class="rank">#${index + 1}</div>
+                                    <div class="info">
+                                        <div class="user">@${item.tiktok_user}</div>
+                                        <div class="server-name">روم التنبيه: ${item.channel_id}</div>
+                                    </div>
+                                    <i class="fa-solid fa-signal" style="color:var(--tiktok-cyan)"></i>
+                                </div>`;
+                        }
+                    });
+                } else {
+                    menu.innerHTML = '<li style="color:var(--text-muted); font-size:0.8rem; text-align:center;">لا توجد سيرفرات محفوظة</li>';
+                }
+            });
 
         if (token) {
             const authBtn = document.getElementById('authBtn');
@@ -220,7 +282,7 @@ HTML_LAYOUT = """
                     if (data.guilds && data.guilds.length > 0) {
                         let html = `
                             <div class="form-group">
-                                <label>اختر السيرفر اللي فيه رتبتك:</label>
+                                <label>اختر السيرفر:</label>
                                 <select id="guildSelect">`;
                         data.guilds.forEach(g => { html += `<option value="${g.id}">${g.name}</option>`; });
                         html += `</select></div>
@@ -257,6 +319,7 @@ HTML_LAYOUT = """
             .then(data => {
                 if(data.success) {
                     msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-circle-check"></i> تم حفظ الإعدادات بنجاح!</div>';
+                    setTimeout(() => location.reload(), 1000);
                 }
             });
         }
@@ -296,7 +359,6 @@ def get_redirect_uri():
     redirect_env = os.getenv("REDIRECT_URI", "").strip()
     if redirect_env:
         return redirect_env
-    # توليد الرابط مع التثبيت على HTTPS لإعادة التوجيه الصحيحة
     base_url = request.host_url.rstrip('/')
     if base_url.startswith("http://"):
         base_url = base_url.replace("http://", "https://", 1)
@@ -338,6 +400,18 @@ def get_guilds():
             for g in res.json():
                 guilds_list.append({"id": str(g['id']), "name": g['name']})
     return jsonify({"guilds": guilds_list})
+
+@app.route('/api/saved-configs')
+def get_saved_configs():
+    configs = load_config()
+    result = []
+    for g_id, data in configs.items():
+        result.append({
+            "guild_id": g_id,
+            "tiktok_user": data.get("tiktok_user", ""),
+            "channel_id": data.get("channel_id", "")
+        })
+    return jsonify({"configs": result})
 
 @app.route('/api/save', methods=['POST'])
 def save_settings():
