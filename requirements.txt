@@ -1,4 +1,6 @@
 Flask
-discord.py
 requests
+discord.py
 waitress
+werkzeug
+PyJWT
