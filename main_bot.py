@@ -11,7 +11,7 @@ from waitress import serve
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 # --------------------------------------------------
-# 1. الإعدادات وقاعدة البيانات السحابية
+# 1. الإعدادات وقاعدة البيانات السحابية (JSONBin)
 # --------------------------------------------------
 
 app = Flask(__name__)
@@ -43,34 +43,20 @@ def load_configs():
 
     return {}
 
-def save_configs():
+def save_configs(config_data):
     if not JSONBIN_KEY or not JSONBIN_BIN_ID:
-        return
+        return False
 
     headers = {
         "Content-Type": "application/json",
         "X-Master-Key": JSONBIN_KEY
     }
     try:
-        requests.put(f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN_ID}", headers=headers, json=GUILDS_CONFIG)
+        res = requests.put(f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN_ID}", headers=headers, json=config_data)
+        return res.status_code == 200
     except Exception as e:
         print(f"[DB Save Error] {e}")
-
-GUILDS_CONFIG = load_configs()
-
-def create_token(user_data, guilds):
-    payload = {
-        'user': user_data,
-        'guilds': guilds,
-        'exp': datetime.utcnow() + timedelta(days=7)
-    }
-    return jwt.encode(payload, SECRET_KEY, algorithm='HS256')
-
-def decode_token(token):
-    try:
-        return jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
-    except Exception:
-        return None
+        return False
 
 # --------------------------------------------------
 # 2. إعدادات بوت ديسكورد والأوامر
@@ -89,9 +75,6 @@ async def on_ready():
 @bot.command(name="setup")
 @commands.has_permissions(administrator=True)
 async def setup_notifications(ctx, channel_id: str, *, title: str):
-    """
-    طريقة الاستخدام: !setup <رقم_الروم> <عنوان_التنبيه>
-    """
     try:
         await ctx.message.delete()
     except Exception:
@@ -107,11 +90,12 @@ async def setup_notifications(ctx, channel_id: str, *, title: str):
             await ctx.send("❌ لم يتم العثور على القناة.", delete_after=5)
         return
 
-    GUILDS_CONFIG[guild_id] = {
+    current_configs = load_configs()
+    current_configs[guild_id] = {
         "channel_id": channel_id,
         "top_title": title
     }
-    save_configs()
+    save_configs(current_configs)
     
     embed = discord.Embed(
         title="🔒 تم إعداد التنبيهات بنجاح",
@@ -126,19 +110,30 @@ async def setup_notifications(ctx, channel_id: str, *, title: str):
     except Exception:
         await ctx.send("✅ تم الحفظ بنجاح!", delete_after=5)
 
-@setup_notifications.error
-async def setup_error(ctx, error):
-    if isinstance(error, commands.MissingPermissions):
-        await ctx.send("❌ هذا الأمر مخصص للمشرفين فقط.", delete_after=5)
-    elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send("❌ طريقة الاستخدام الصحيحة:\n`!setup <رقم_الروم> <العنوان>`", delete_after=5)
-
 def run_bot():
     if BOT_TOKEN:
         bot.run(BOT_TOKEN)
 
 # --------------------------------------------------
-# 3. واجهة لوحة التحكم (Flask Web App)
+# 3. توثيق الأذونات (JWT)
+# --------------------------------------------------
+
+def create_token(user_data, guilds):
+    payload = {
+        'user': user_data,
+        'guilds': guilds,
+        'exp': datetime.utcnow() + timedelta(days=7)
+    }
+    return jwt.encode(payload, SECRET_KEY, algorithm='HS256')
+
+def decode_token(token):
+    try:
+        return jwt.decode(token, SECRET_KEY, algorithms=['HS256'])
+    except Exception:
+        return None
+
+# --------------------------------------------------
+# 4. واجهة لوحة التحكم (Flask Web App)
 # --------------------------------------------------
 
 DASHBOARD_HTML = """
@@ -231,8 +226,9 @@ DASHBOARD_HTML = """
         .btn-submit {
             width: 100%; padding: 12px; background-color: var(--accent-color);
             border: none; border-radius: 8px; color: white; font-weight: bold;
-            font-size: 16px; cursor: pointer;
+            font-size: 16px; cursor: pointer; transition: 0.2s;
         }
+        .btn-submit:hover { opacity: 0.9; }
 
         .btn-login {
             display: inline-flex; align-items: center; gap: 10px;
@@ -337,26 +333,26 @@ DASHBOARD_HTML = """
 
                         <div class="form-group">
                             <label>رقم روم التنبيهات (Channel ID):</label>
-                            <input type="text" id="channel_id" name="channel_id" class="form-control" value="{{ current_config.get('channel_id', '') }}" placeholder="مثال: 1538986763622813766" required>
+                            <input type="text" id="channel_id" name="channel_id" class="form-control" value="{{ current_config.get('channel_id', '') }}" placeholder="أدخل رقم القناة" required>
                         </div>
 
                         <div class="form-group">
                             <label>عنوان التنبيه:</label>
-                            <input type="text" id="top_title" name="top_title" class="form-control" value="{{ current_config.get('top_title', '') }}" placeholder="مثال: بدأ البث حياكم" required>
+                            <input type="text" id="top_title" name="top_title" class="form-control" value="{{ current_config.get('top_title', '') }}" placeholder="أدخل عنوان التنبيه" required>
                         </div>
 
-                        <button type="submit" class="btn-submit">حفظ الإعدادات 🔥</button>
+                        <button type="submit" id="submit_btn" class="btn-submit">حفظ الإعدادات 🔥</button>
                     </form>
 
                     <div class="saved-box">
                         <h4><i class="fa-solid fa-box-archive"></i> صندوق المحفوظات (خاص بـ {{ user['username'] }})</h4>
                         <div class="saved-item">
                             <span style="color: var(--text-muted);">روم التنبيه المحفوظ:</span>
-                            <span id="saved_channel_display">{{ current_config.get('channel_id', 'لا يوجد') }}</span>
+                            <span id="saved_channel_display" style="font-weight: bold; color: #2ed573;">{{ current_config.get('channel_id', 'لا يوجد') }}</span>
                         </div>
                         <div class="saved-item">
                             <span style="color: var(--text-muted);">عنوان التنبيه المحفوظ:</span>
-                            <span id="saved_title_display">{{ current_config.get('top_title', 'لا يوجد') }}</span>
+                            <span id="saved_title_display" style="font-weight: bold; color: #2ed573;">{{ current_config.get('top_title', 'لا يوجد') }}</span>
                         </div>
                     </div>
 
@@ -414,14 +410,13 @@ DASHBOARD_HTML = """
         async function saveSettings(e) {
             e.preventDefault();
             
+            const submitBtn = document.getElementById('submit_btn');
+            submitBtn.disabled = true;
+            submitBtn.innerText = "جاري الحفظ...";
+
             const guildId = document.getElementById('guild_select').value;
             const channelId = document.getElementById('channel_id').value.trim();
             const topTitle = document.getElementById('top_title').value.trim();
-
-            if (!channelId || !topTitle) {
-                alert("يرجى كتابة رقم الروم وعنوان التنبيه أولاً!");
-                return;
-            }
 
             try {
                 const res = await fetch('/api/save-settings', {
@@ -450,6 +445,9 @@ DASHBOARD_HTML = """
                 }
             } catch (err) {
                 alert("فشل الاتصال بالسيرفر!");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerText = "حفظ الإعدادات 🔥";
             }
         }
     </script>
@@ -459,8 +457,7 @@ DASHBOARD_HTML = """
 
 @app.route('/')
 def home():
-    global GUILDS_CONFIG
-    GUILDS_CONFIG = load_configs()
+    configs = load_configs()
     
     token = request.args.get('token')
     selected_guild_id = request.args.get('guild_id')
@@ -472,9 +469,9 @@ def home():
         guilds = payload.get('guilds', [])
         
         if not selected_guild_id and guilds:
-            selected_guild_id = guilds[0]['id']
+            selected_guild_id = str(guilds[0]['id'])
             
-        current_config = GUILDS_CONFIG.get(str(selected_guild_id), {})
+        current_config = configs.get(str(selected_guild_id), {})
     else:
         logged_in = False
         user = None
@@ -550,29 +547,34 @@ def api_save_settings():
     if not payload:
         return jsonify({'status': 'error', 'message': 'غير مصرح لك'}), 401
 
-    guild_id = str(data.get('guild_id', ''))
+    guild_id = str(data.get('guild_id', '')).strip()
     channel_id = str(data.get('channel_id', '')).strip()
     top_title = str(data.get('top_title', '')).strip()
 
     if guild_id and channel_id and top_title:
-        GUILDS_CONFIG[guild_id] = {
+        current_configs = load_configs()
+        current_configs[guild_id] = {
             "channel_id": channel_id,
             "top_title": top_title
         }
-        save_configs()
         
-        return jsonify({
-            'status': 'success',
-            'data': {
-                'channel_id': channel_id,
-                'top_title': top_title
-            }
-        })
+        saved = save_configs(current_configs)
+        
+        if saved:
+            return jsonify({
+                'status': 'success',
+                'data': {
+                    'channel_id': channel_id,
+                    'top_title': top_title
+                }
+            })
+        else:
+            return jsonify({'status': 'error', 'message': 'فشل الحفظ في قاعدة البيانات'}), 500
 
     return jsonify({'status': 'error', 'message': 'البيانات المدخلة غير مكتملة'}), 400
 
 # --------------------------------------------------
-# 4. التشغيل
+# 5. التشغيل
 # --------------------------------------------------
 
 if __name__ == '__main__':
