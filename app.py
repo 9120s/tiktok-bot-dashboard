@@ -1,76 +1,44 @@
 import os
-import requests
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, render_template, request, jsonify
+from database import save_guild_config, get_all_configs
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', 'super-secret-key-2s2')
-
-# إعداد قاعدة البيانات
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
-
-# نموذج التنبيهات
-class Alert(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    guild_id = db.Column(db.String(100), nullable=False)
-    channel_id = db.Column(db.String(100), nullable=False)
-    tiktok_username = db.Column(db.String(100), nullable=False)
-
-with app.app_context():
-    db.create_all()
-
-# تصفية السيرفرات بناءً على صلاحيات الإدارة للمستخدم (Administrator / Manage Server)
-def filter_manageable_guilds(guilds):
-    manageable = []
-    for g in guilds:
-        perms = int(g.get('permissions', 0))
-        # 0x8 تعني Administrator و 0x20 تعني Manage Server
-        if (perms & 0x8) == 0x8 or (perms & 0x20) == 0x20:
-            manageable.append(g)
-    return manageable
 
 @app.route('/')
 def index():
-    user = session.get('user')
-    guilds = session.get('user_guilds', [])
-    
-    # تصفية قائمة السيرفرات المتاحة للمستخدم حسب صلاحياته فقط
-    filtered_guilds = filter_manageable_guilds(guilds) if guilds else []
-    
-    alerts = Alert.query.all()
-    return render_template('index.html', user=user, guilds=filtered_guilds, alerts=alerts)
+    return render_template('index.html')
 
-# مسار تسجيل الخروج الصحيح
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('index'))
+@app.route('/api/config', methods=['GET'])
+def get_config():
+    token = request.args.get('token')
+    if not token:
+        return jsonify({"error": "Unauthorized"}), 401
+        
+    configs = get_all_configs()
+    if configs:
+        last_key = list(configs.keys())[-1]
+        return jsonify(configs[last_key])
+    return jsonify({})
 
-# إضافة تنبيه جديد
-@app.route('/add_alert', methods=['POST'])
-def add_alert():
-    guild_id = request.form.get('guild_id')
-    channel_id = request.form.get('channel_id')
-    tiktok_username = request.form.get('tiktok_username')
+@app.route('/api/config', methods=['POST'])
+def save_config():
+    token = request.args.get('token')
+    if not token:
+        return jsonify({"error": "Unauthorized"}), 401
+        
+    data = request.json or {}
+    guild_id = data.get('guild_id')
+    tiktok_username = data.get('tiktok_username')
+    channel_id = data.get('channel_id')
+    message_title = data.get('message_title')
 
-    if guild_id and channel_id and tiktok_username:
-        new_alert = Alert(guild_id=guild_id, channel_id=channel_id, tiktok_username=tiktok_username.strip())
-        db.session.add(new_alert)
-        db.session.commit()
+    if not all([guild_id, tiktok_username, channel_id, message_title]):
+        return jsonify({"error": "جميع الحقول مطلوبة"}), 400
 
-    return redirect(url_for('index'))
-
-# حذف تنبيه
-@app.route('/delete_alert/<int:id>', methods=['POST'])
-def delete_alert(id):
-    alert = Alert.query.get(id)
-    if alert:
-        db.session.delete(alert)
-        db.session.commit()
-    return redirect(url_for('index'))
+    success = save_guild_config(guild_id, tiktok_username, channel_id, message_title)
+    if success:
+        return jsonify({"message": "Saved successfully"})
+    return jsonify({"error": "Failed to save data"}), 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 5000)))
