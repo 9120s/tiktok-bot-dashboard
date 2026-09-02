@@ -86,14 +86,12 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 async def on_ready():
     print(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
-# أمر إعداد التنبيه مع مسح أثر الأمر فوراً وإرسال تأكيد خاص للمستخدم فقط
 @bot.command(name="setup")
 @commands.has_permissions(administrator=True)
 async def setup_notifications(ctx, channel_id: str, *, title: str):
     """
     طريقة الاستخدام: !setup <رقم_الروم> <عنوان_التنبيه>
     """
-    # مسح أمر المستخدم تلقائياً حتى لا يراه أحد في الشات
     try:
         await ctx.message.delete()
     except Exception:
@@ -116,14 +114,13 @@ async def setup_notifications(ctx, channel_id: str, *, title: str):
     save_configs()
     
     embed = discord.Embed(
-        title="🔒 تم إعداد التنبيهات بنجاح (خاص بك)",
+        title="🔒 تم إعداد التنبيهات بنجاح",
         color=discord.Color.green()
     )
     embed.add_field(name="السيرفر:", value=ctx.guild.name, inline=False)
     embed.add_field(name="الروم:", value=f"<#{channel_id}> (`{channel_id}`)", inline=False)
     embed.add_field(name="عنوان التنبيه:", value=title, inline=False)
     
-    # إرسال النتيجة في الخاص للمستخدم فقط
     try:
         await ctx.author.send(embed=embed)
     except Exception:
@@ -340,27 +337,26 @@ DASHBOARD_HTML = """
 
                         <div class="form-group">
                             <label>رقم روم التنبيهات (Channel ID):</label>
-                            <input type="text" id="channel_id" name="channel_id" class="form-control" value="{{ current_config.get('channel_id', '') }}" required>
+                            <input type="text" id="channel_id" name="channel_id" class="form-control" value="{{ current_config.get('channel_id', '') }}" placeholder="مثال: 1538986763622813766" required>
                         </div>
 
                         <div class="form-group">
                             <label>عنوان التنبيه:</label>
-                            <input type="text" id="top_title" name="top_title" class="form-control" value="{{ current_config.get('top_title', '') }}" required>
+                            <input type="text" id="top_title" name="top_title" class="form-control" value="{{ current_config.get('top_title', '') }}" placeholder="مثال: بدأ البث حياكم" required>
                         </div>
 
                         <button type="submit" class="btn-submit">حفظ الإعدادات 🔥</button>
                     </form>
 
-                    <!-- صندوق المحفوظات الخاص بك فقط -->
                     <div class="saved-box">
                         <h4><i class="fa-solid fa-box-archive"></i> صندوق المحفوظات (خاص بـ {{ user['username'] }})</h4>
                         <div class="saved-item">
                             <span style="color: var(--text-muted);">روم التنبيه المحفوظ:</span>
-                            <span>{{ current_config.get('channel_id', 'لا يوجد') }}</span>
+                            <span id="saved_channel_display">{{ current_config.get('channel_id', 'لا يوجد') }}</span>
                         </div>
                         <div class="saved-item">
                             <span style="color: var(--text-muted);">عنوان التنبيه المحفوظ:</span>
-                            <span>{{ current_config.get('top_title', 'لا يوجد') }}</span>
+                            <span id="saved_title_display">{{ current_config.get('top_title', 'لا يوجد') }}</span>
                         </div>
                     </div>
 
@@ -417,27 +413,43 @@ DASHBOARD_HTML = """
 
         async function saveSettings(e) {
             e.preventDefault();
+            
             const guildId = document.getElementById('guild_select').value;
-            const channelId = document.getElementById('channel_id').value;
-            const topTitle = document.getElementById('top_title').value;
+            const channelId = document.getElementById('channel_id').value.trim();
+            const topTitle = document.getElementById('top_title').value.trim();
 
-            const res = await fetch('/api/save-settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    token: currentToken,
-                    guild_id: guildId,
-                    channel_id: channelId,
-                    top_title: topTitle
-                })
-            });
+            if (!channelId || !topTitle) {
+                alert("يرجى كتابة رقم الروم وعنوان التنبيه أولاً!");
+                return;
+            }
 
-            if (res.ok) {
-                const msg = document.getElementById('save-msg');
-                msg.style.display = 'block';
-                setTimeout(() => {
-                    window.location.href = '/?token=' + currentToken + '&guild_id=' + guildId;
-                }, 800);
+            try {
+                const res = await fetch('/api/save-settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        token: currentToken,
+                        guild_id: guildId,
+                        channel_id: channelId,
+                        top_title: topTitle
+                    })
+                });
+
+                const data = await res.json();
+
+                if (res.ok && data.status === 'success') {
+                    const msg = document.getElementById('save-msg');
+                    msg.style.display = 'block';
+                    
+                    document.getElementById('saved_channel_display').innerText = data.data.channel_id;
+                    document.getElementById('saved_title_display').innerText = data.data.top_title;
+
+                    setTimeout(() => { msg.style.display = 'none'; }, 3000);
+                } else {
+                    alert("حدث خطأ أثناء الحفظ: " + (data.message || "خطأ غير معروف"));
+                }
+            } catch (err) {
+                alert("فشل الاتصال بالسيرفر!");
             }
         }
     </script>
@@ -536,19 +548,28 @@ def api_save_settings():
     payload = decode_token(token) if token else None
 
     if not payload:
-        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 401
+        return jsonify({'status': 'error', 'message': 'غير مصرح لك'}), 401
 
-    guild_id = data.get('guild_id')
+    guild_id = str(data.get('guild_id', ''))
+    channel_id = str(data.get('channel_id', '')).strip()
+    top_title = str(data.get('top_title', '')).strip()
 
-    if guild_id:
-        GUILDS_CONFIG[str(guild_id)] = {
-            "channel_id": data.get('channel_id'),
-            "top_title": data.get('top_title')
+    if guild_id and channel_id and top_title:
+        GUILDS_CONFIG[guild_id] = {
+            "channel_id": channel_id,
+            "top_title": top_title
         }
         save_configs()
-        return jsonify({'status': 'success'})
+        
+        return jsonify({
+            'status': 'success',
+            'data': {
+                'channel_id': channel_id,
+                'top_title': top_title
+            }
+        })
 
-    return jsonify({'status': 'error', 'message': 'Invalid Guild ID'}), 400
+    return jsonify({'status': 'error', 'message': 'البيانات المدخلة غير مكتملة'}), 400
 
 # --------------------------------------------------
 # 4. التشغيل
