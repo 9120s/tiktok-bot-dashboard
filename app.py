@@ -4,7 +4,6 @@ import threading
 import requests
 from flask import Flask, request, jsonify, redirect, render_template_string
 from TikTokLive import TikTokLiveClient
-from TikTokLive.events import ConnectEvent
 
 app = Flask(__name__)
 
@@ -13,7 +12,6 @@ DISCORD_CLIENT_SECRET = os.getenv("CLIENT_SECRET", os.getenv("DISCORD_CLIENT_SEC
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 SERVER_INVITE_URL = os.getenv("SERVER_INVITE_URL", "https://discord.gg/YOUR_INVITE_CODE").strip()
 
-# ذاكرة رئيسية لحفظ البيانات أثناء عمل السيرفر
 SAVED_CONFIGS = {}
 active_monitors = {}
 
@@ -30,7 +28,7 @@ def send_discord_alert(channel_id, tiktok_user, is_test=False):
     
     desc = f"بدأ **@{tiktok_user}** بث جديد على تيك توك الآن! 🔥\n\n[اضغط هنا لمشاهدة البث مباشرة](https://www.tiktok.com/@{tiktok_user}/live)"
     if is_test:
-        desc = f"⚙️ **تم الربط بنجاح!**\nحساب **@{tiktok_user}** متصل الآن بالمراقبة التلقائية.\n\n[رابط القناة](https://www.tiktok.com/@{tiktok_user})"
+        desc = f"⚙️ **تم الربط بنجاح!**\nحساب **@{tiktok_user}** متصل الآن بالمراقبة التلقائية وسيرسل إشعارات البث فور بدئها."
 
     payload = {
         "embeds": [{
@@ -48,17 +46,22 @@ def send_discord_alert(channel_id, tiktok_user, is_test=False):
 
 async def start_tiktok_listener(tiktok_user, channel_id):
     client = TikTokLiveClient(unique_id=tiktok_user)
-    
-    @client.on(ConnectEvent)
-    async def on_connect(event: ConnectEvent):
-        send_discord_alert(channel_id, tiktok_user)
+    is_live_now = False
 
     while True:
         try:
-            await client.start()
+            is_connected = await client.is_live()
+            
+            if is_connected and not is_live_now:
+                is_live_now = True
+                send_discord_alert(channel_id, tiktok_user)
+            elif not is_connected:
+                is_live_now = False
+                
         except Exception as e:
-            print(f"[TIKTOK ERROR] {tiktok_user}: {e}")
-        await asyncio.sleep(10)
+            print(f"[TIKTOK CHECK ERROR] {tiktok_user}: {e}")
+        
+        await asyncio.sleep(30)
 
 def run_listener_in_thread(tiktok_user, channel_id):
     loop = asyncio.new_event_loop()
@@ -385,13 +388,10 @@ def save_settings():
     tiktok_user = data.get('tiktok_user', '').replace('@', '').strip()
     channel_id = data.get('channel_id', '').strip()
 
-    # حفظ مباشر في الذاكرة لتحديث القائمة الجانبية فوراً
     SAVED_CONFIGS[guild_id] = {"tiktok_user": tiktok_user, "channel_id": channel_id}
 
-    # إرسال تنبيه تأكيدي مخفي للديسكورد فوراً
     threading.Thread(target=send_discord_alert, args=(channel_id, tiktok_user, True), daemon=True).start()
 
-    # تفعيل الاستماع للبث مباشرة
     t = threading.Thread(target=run_listener_in_thread, args=(tiktok_user, channel_id), daemon=True)
     t.start()
     active_monitors[guild_id] = t
