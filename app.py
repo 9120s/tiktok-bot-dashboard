@@ -2,6 +2,8 @@ import os
 import asyncio
 import threading
 import requests
+import discord
+from discord.ext import commands
 from flask import Flask, request, jsonify, redirect, render_template_string
 from TikTokLive import TikTokLiveClient
 
@@ -15,6 +17,25 @@ SERVER_INVITE_URL = os.getenv("SERVER_INVITE_URL", "https://discord.gg/TQUFzyxM7
 SAVED_CONFIGS = {}
 active_monitors = {}
 
+# --- إعداد بوت ديسكورد للبقاء أونلاين (Online 24/7) ---
+intents = discord.Intents.default()
+discord_client = commands.Bot(command_prefix="!", intents=intents)
+
+@discord_client.event
+async def on_ready():
+    print(f'✅ البوت متصل الآن وأونلاين باسم: {discord_client.user}')
+
+def run_discord_bot():
+    if BOT_TOKEN:
+        try:
+            discord_client.run(BOT_TOKEN)
+        except Exception as e:
+            print(f"[DISCORD BOT ERROR] {e}")
+
+# تشغيل اتصالات البوت في خلفية التطبيق
+threading.Thread(target=run_discord_bot, daemon=True).start()
+
+# --- إرسال الإشعارات عبر API ---
 def send_discord_alert(channel_id, tiktok_user, is_test=False):
     if not BOT_TOKEN:
         print("[ERROR] BOT_TOKEN is missing!")
