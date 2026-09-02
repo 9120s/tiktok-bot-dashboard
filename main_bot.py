@@ -55,4 +55,4 @@ async def on_ready():
     if not check_tiktok_lives.is_running():
         check_tiktok_lives.start()
 
-bot.run(os.getenv("BOT_TOKEN"))
+# bot.run(os.getenv("BOT_TOKEN"))
