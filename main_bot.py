@@ -18,10 +18,11 @@ app.secret_key = os.environ.get("SECRET_KEY", "mysecretkey12345")
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = True
 
-CLIENT_ID = os.environ.get("CLIENT_ID", "")
-CLIENT_SECRET = os.environ.get("CLIENT_SECRET", "")
-REDIRECT_URI = os.environ.get("REDIRECT_URI", "")
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+# دعم قراءة المتغيرات بالاسمين (مع أو بدون DISCORD_)
+CLIENT_ID = os.environ.get("CLIENT_ID") or os.environ.get("DISCORD_CLIENT_ID", "")
+CLIENT_SECRET = os.environ.get("CLIENT_SECRET") or os.environ.get("DISCORD_CLIENT_SECRET", "")
+REDIRECT_URI = os.environ.get("REDIRECT_URI") or os.environ.get("DISCORD_REDIRECT_URI", "")
+BOT_TOKEN = os.environ.get("BOT_TOKEN") or os.environ.get("DISCORD_BOT_TOKEN", "")
 
 API_BASE_URL = "https://discord.com/api/v10"
 CONFIG_FILE = "guilds_config.json"
@@ -128,7 +129,7 @@ def login():
 def callback():
     code = request.args.get('code')
     if not code:
-        return redirect('/')
+        return "لم يتم استلام كود التوثيق من ديسكورد", 400
 
     data = {
         'client_id': CLIENT_ID,
@@ -141,11 +142,11 @@ def callback():
 
     try:
         token_res = requests.post(f"{API_BASE_URL}/oauth2/token", data=data, headers=headers)
-        access_token = token_res.json().get('access_token')
+        token_data = token_res.json()
+        access_token = token_data.get('access_token')
 
         if not access_token:
-            print(f"[Auth Error Token Response]: {token_res.json()}")
-            return redirect('/')
+            return f"<h3>فشل الحصول على التوكين</h3><p>رد ديسكورد: {token_data}</p><p>الرابط المستخدم: {REDIRECT_URI}</p>", 400
 
         user_headers = {'Authorization': f"Bearer {access_token}"}
         user_data = requests.get(f"{API_BASE_URL}/users/@me", headers=user_headers).json()
@@ -160,11 +161,10 @@ def callback():
 
         session['user'] = {'id': user_data.get('id'), 'username': user_data.get('username'), 'avatar': user_data.get('avatar')}
         session['guilds'] = filtered_guilds
+        return redirect('/')
 
     except Exception as e:
-        print(f"[Auth Exception Error]: {e}")
-
-    return redirect('/')
+        return f"<h3>حدث خطأ في السيرفر:</h3><p>{e}</p>", 500
 
 @app.route('/save-settings', methods=['POST'])
 def save_settings():
