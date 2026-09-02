@@ -6,6 +6,7 @@ app = Flask(__name__)
 
 DISCORD_CLIENT_ID = os.getenv("CLIENT_ID", os.getenv("DISCORD_CLIENT_ID", "1544289467853045861")).strip()
 DISCORD_CLIENT_SECRET = os.getenv("CLIENT_SECRET", os.getenv("DISCORD_CLIENT_SECRET", "")).strip()
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()  # ضع توكن البوت الخاص بك في متغيرات البيئة Render باسم BOT_TOKEN
 
 SERVER_INVITE_URL = "https://discord.gg/YOUR_INVITE_CODE"
 
@@ -16,14 +17,6 @@ HTML_LAYOUT = """
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>لوحة التحكم | TikTok Live</title>
-    
-    <!-- إعدادات تحويل الموقع لتطبيق (PWA) -->
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#121212">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="TikTok Dashboard">
-
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
         :root {
@@ -51,7 +44,6 @@ HTML_LAYOUT = """
             min-height: 100vh;
         }
 
-        /* Sidebar */
         .sidebar {
             width: 260px;
             background: var(--bg-sidebar);
@@ -110,15 +102,18 @@ HTML_LAYOUT = """
             box-shadow: 0 4px 15px rgba(254, 44, 85, 0.4);
         }
 
-        .install-app-btn {
-            background: rgba(37, 244, 238, 0.1);
-            color: var(--tiktok-cyan) !important;
-            border: 1px solid var(--tiktok-cyan);
+        .auth-btn {
+            background: rgba(254, 44, 85, 0.15);
+            color: var(--tiktok-pink) !important;
+            border: 1px solid var(--tiktok-pink);
             margin-bottom: 8px;
-            display: none;
         }
 
-        /* Main Content */
+        .auth-btn:hover {
+            background: var(--tiktok-pink) !important;
+            color: #fff !important;
+        }
+
         .main-content {
             margin-right: 260px;
             flex: 1;
@@ -162,6 +157,8 @@ HTML_LAYOUT = """
             box-shadow: 0 0 15px rgba(254, 44, 85, 0.5);
             margin-top: 15px;
         }
+
+        .btn-tiktok:hover { background: #e02649; }
 
         .form-group { margin-bottom: 1.2rem; }
         .form-group label { display: block; margin-bottom: 6px; font-weight: bold; font-size: 0.95rem; }
@@ -235,8 +232,10 @@ HTML_LAYOUT = """
         </div>
 
         <ul class="nav-menu">
-            <li class="nav-item" id="installNavItem">
-                <a id="installBtn" class="install-app-btn"><i class="fa-solid fa-download"></i> تثبيت التطبيق</a>
+            <li class="nav-item" id="authNavItem">
+                <a href="/login" class="auth-btn" id="authBtn">
+                    <i class="fa-solid fa-right-to-bracket"></i> تسجيل الدخول
+                </a>
             </li>
             <li class="nav-item">
                 <a href="{{ server_invite }}" target="_blank" class="join-server-btn">
@@ -247,7 +246,6 @@ HTML_LAYOUT = """
     </aside>
 
     <main class="main-content">
-        <!-- قسم الرئيسية -->
         <div id="section-home" class="card page-section active">
             <h2>إدارة البوت</h2>
             <p class="desc">قم بتسجيل الدخول لاختيار السيرفر والتحكم بالإعدادات</p>
@@ -259,7 +257,6 @@ HTML_LAYOUT = """
             </div>
         </div>
 
-        <!-- قسم أفضل ثوالث للبثوث -->
         <div id="section-top" class="card page-section">
             <h2>🏆 أفضل ثوالث للبثوث</h2>
             <p class="desc">قائمة بـ أفضل البثوث النشطة حالياً</p>
@@ -269,7 +266,6 @@ HTML_LAYOUT = """
             </div>
         </div>
 
-        <!-- قسم السيرفرات المحفوظة -->
         <div id="section-saved" class="card page-section">
             <h2>🔖 السيرفرات المحفوظة</h2>
             <p class="desc">إدارة السيرفرات التي تم ضبط إعداداتها سابقاً</p>
@@ -281,26 +277,6 @@ HTML_LAYOUT = """
     </main>
 
     <script>
-        // PWA Script لتثبيت التطبيق
-        let deferredPrompt;
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            const installBtn = document.getElementById('installBtn');
-            installBtn.style.display = 'flex';
-            
-            installBtn.addEventListener('click', () => {
-                deferredPrompt.prompt();
-                deferredPrompt.userChoice.then((choiceResult) => {
-                    if (choiceResult.outcome === 'accepted') {
-                        installBtn.style.display = 'none';
-                    }
-                    deferredPrompt = null;
-                });
-            });
-        });
-
-        // التنقل بين أقسام القائمة الجانبية
         function switchTab(tab) {
             document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.page-section').forEach(el => el.classList.remove('active'));
@@ -326,6 +302,11 @@ HTML_LAYOUT = """
         }
 
         if (token) {
+            // تحديث زر القائمة الجانبية إلى تسجيل الخروج
+            const authBtn = document.getElementById('authBtn');
+            authBtn.href = '/';
+            authBtn.innerHTML = '<i class="fa-solid fa-right-from-bracket"></i> تسجيل الخروج';
+
             document.getElementById('content').innerHTML = '<p style="color:var(--tiktok-cyan); text-align:center;"><i class="fa-solid fa-spinner fa-spin"></i> جاري جلب السيرفرات...</p>';
             fetch('/api/guilds?token=' + token)
                 .then(res => res.json())
@@ -354,11 +335,11 @@ HTML_LAYOUT = """
 
                             <div class="form-group">
                                 <label><i class="fa-solid fa-hashtag"></i> رقم/آيدي روم التنبيهات (Channel ID):</label>
-                                <input type="text" id="channelId" placeholder="مثال: 123456789012345678">
+                                <input type="text" id="channelId" placeholder="مثال: 1538986763622813766">
                             </div>
 
                             <button onclick="saveSettings()" class="btn-tiktok">
-                                <i class="fa-solid fa-floppy-disk"></i> حفظ التنبيهات
+                                <i class="fa-solid fa-floppy-disk"></i> حفظ التنبيهات وإرسال تجريبي
                             </button>
 
                             <div id="responseMsg"></div>
@@ -386,7 +367,7 @@ HTML_LAYOUT = """
                 return;
             }
 
-            msgDiv.innerHTML = '<p style="color:var(--tiktok-cyan); text-align:center; margin-top:10px;"><i class="fa-solid fa-spinner fa-spin"></i> جاري حفظ التنبيهات...</p>';
+            msgDiv.innerHTML = '<p style="color:var(--tiktok-cyan); text-align:center; margin-top:10px;"><i class="fa-solid fa-spinner fa-spin"></i> جاري حفظ وإرسال التنبيه إلى الديسكورد...</p>';
 
             fetch('/api/save', {
                 method: 'POST',
@@ -400,7 +381,7 @@ HTML_LAYOUT = """
             .then(res => res.json())
             .then(data => {
                 if(data.success) {
-                    msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-circle-check"></i> تم حفظ إعدادات التنبيهات بنجاح! جاهز للبث🔥</div>';
+                    msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-circle-check"></i> تم حفظ الإعدادات وتم إرسال تنبيه في روم الديسكورد! 🔥</div>';
                     document.getElementById('savedGuildsList').innerHTML = `
                         <div style="background:#000; padding:15px; border-radius:8px; border:1px solid var(--tiktok-cyan); text-align:right;">
                             <p style="color:var(--tiktok-cyan); font-weight:bold;"><i class="fa-solid fa-server"></i> ${guildName}</p>
@@ -408,7 +389,7 @@ HTML_LAYOUT = """
                         </div>
                     `;
                 } else {
-                    msgDiv.innerHTML = '<div class="error">حدث خطأ أثناء الحفظ.</div>';
+                    msgDiv.innerHTML = `<div class="error">خطأ في الإرسال: ${data.error || 'تأكد من صلاحيات البوت ورقم الروم'}</div>`;
                 }
             })
             .catch(e => {
@@ -419,24 +400,6 @@ HTML_LAYOUT = """
 </body>
 </html>
 """
-
-@app.route('/manifest.json')
-def manifest():
-    return jsonify({
-        "name": "TikTok Dashboard",
-        "short_name": "Dashboard",
-        "start_url": "/",
-        "display": "standalone",
-        "background_color": "#121212",
-        "theme_color": "#fe2c55",
-        "icons": [
-            {
-                "src": "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/svgs/brands/tiktok.svg",
-                "sizes": "512x512",
-                "type": "image/svg+xml"
-            }
-        ]
-    })
 
 def get_redirect_uri():
     redirect_env = os.getenv("REDIRECT_URI", "").strip()
@@ -516,8 +479,31 @@ def save_settings():
     tiktok_user = data.get('tiktok_user')
     channel_id = data.get('channel_id')
 
-    print(f"Saved Config: Guild={guild_id}, TikTok={tiktok_user}, Channel={channel_id}")
-    return jsonify({"success": True})
+    if not BOT_TOKEN:
+        return jsonify({"success": False, "error": "لم يتم ضبط BOT_TOKEN في متغيرات البيئة على Render."})
+
+    # إرسال رسالة تنبيه مباشرة عبر Discord API
+    discord_api_url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
+    headers = {
+        "Authorization": f"Bot {BOT_TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "embeds": [{
+            "title": "🔴 بث جديد مباشر الان!",
+            "description": f"بدأ **{tiktok_user}** بث جديد على تيك توك الآن! 🔥\n\n[اضغط هنا لمشاهدة البث مباشرة](https://www.tiktok.com/@{tiktokUser}/live)",
+            "color": 16657493
+        }]
+    }
+
+    try:
+        response = requests.post(discord_api_url, json=payload, headers=headers)
+        if response.status_code in [200, 201]:
+            return jsonify({"success": True})
+        else:
+            return jsonify({"success": False, "error": f"كود الخطأ من ديسكورد: {response.status_code}"})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
