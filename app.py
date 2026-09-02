@@ -126,8 +126,16 @@ HTML_LAYOUT = """
         }
         .nav-item a:hover, .nav-item.active a { background: #27272a; color: var(--tiktok-cyan); }
 
-        .saved-servers-list { list-style: none; display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto; }
+        .saved-servers-list { list-style: none; display: flex; flex-direction: column; gap: 6px; max-height: 150px; overflow-y: auto; }
         .saved-server-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #18181b; border-radius: 6px; font-size: 0.85rem; border: 1px solid var(--border-color); }
+
+        .top3-sidebar-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+        .top3-sidebar-item {
+            background: #18181b; border: 1px solid var(--border-color); border-radius: 8px;
+            padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem;
+        }
+        .top3-sidebar-item .user { font-weight: bold; color: var(--tiktok-cyan); }
+        .top3-sidebar-item .server-id { font-size: 0.75rem; color: var(--text-muted); }
 
         .join-server-btn {
             background: linear-gradient(45deg, var(--tiktok-pink), var(--tiktok-cyan));
@@ -176,6 +184,11 @@ HTML_LAYOUT = """
             <ul class="saved-servers-list" id="savedServersMenu">
                 <li style="color:var(--text-muted); font-size:0.8rem; text-align:center;">جاري التحميل...</li>
             </ul>
+
+            <div class="section-title"><i class="fa-solid fa-crown"></i> أفضل ثوالث</div>
+            <ul class="top3-sidebar-list" id="top3SidebarMenu">
+                <li style="color:var(--text-muted); font-size:0.8rem; text-align:center;">لا توجد بيانات</li>
+            </ul>
         </div>
 
         <ul class="nav-menu" style="margin-top: 1.5rem;">
@@ -209,17 +222,30 @@ HTML_LAYOUT = """
             .then(res => res.json())
             .then(data => {
                 const menu = document.getElementById('savedServersMenu');
+                const top3Menu = document.getElementById('top3SidebarMenu');
+
                 if (data.configs && data.configs.length > 0) {
                     menu.innerHTML = '';
-                    data.configs.forEach(item => {
+                    top3Menu.innerHTML = '';
+
+                    data.configs.forEach((item, index) => {
                         menu.innerHTML += `
                             <li class="saved-server-item">
                                 <span><i class="fa-solid fa-hashtag"></i> ${item.guild_id}</span>
                                 <strong style="color:var(--tiktok-cyan)">@${item.tiktok_user}</strong>
                             </li>`;
+
+                        if (index < 3) {
+                            top3Menu.innerHTML += `
+                                <li class="top3-sidebar-item">
+                                    <span class="user">@${item.tiktok_user}</span>
+                                    <span class="server-id">${item.guild_id}</span>
+                                </li>`;
+                        }
                     });
                 } else {
                     menu.innerHTML = '<li style="color:var(--text-muted); font-size:0.8rem; text-align:center; padding:5px;">لا توجد سيرفرات محفوظة</li>';
+                    top3Menu.innerHTML = '<li style="color:var(--text-muted); font-size:0.8rem; text-align:center; padding:5px;">لا توجد ثوالث حالياً</li>';
                 }
             });
 
@@ -238,7 +264,7 @@ HTML_LAYOUT = """
                                 <select id="guildSelect">`;
                         data.guilds.forEach(g => { html += `<option value="${g.id}">${g.name}</option>`; });
                         html += `</select></div>
-                            <div style="text-align: center; margin: 10px 0;"><span class="status-badge"><i class="fa-solid fa-bolt"></i> المراقبة التلقائية تعمل في الخلفية 🔥</span></div>
+                            <div style="text-align: center; margin: 10px 0;"><span class="status-badge"><i class="fa-solid fa-bolt"></i> التنبيه المخفي تلقائي وشغال 100% 🔥</span></div>
                             <div class="form-group"><label>يوزر التيك توك (TikTok Username):</label><input type="text" id="tiktokUser" placeholder="مثال: 2vce4"></div>
                             <div class="form-group"><label>رقم/آيدي روم التنبيهات (Channel ID):</label><input type="text" id="channelId" placeholder="مثال: 1538986763622813766"></div>
                             
@@ -271,7 +297,7 @@ HTML_LAYOUT = """
             .then(res => res.json())
             .then(data => {
                 if(data.success) {
-                    msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-circle-check"></i> تم الحفظ! المراقبة تعمل في الخلفية الآن.</div>';
+                    msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-circle-check"></i> تم الحفظ! المراقبة التلقائية تعمل في الخلفية الآن.</div>';
                     setTimeout(() => location.reload(), 1200);
                 }
             });
