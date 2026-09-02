@@ -82,7 +82,7 @@
             background-color: #4752C4;
         }
 
-        /* القائمة الجانبية (تفتح عند الضغط على الثلاث نقاط) */
+        /* القائمة الجانبية */
         .sidebar {
             position: fixed;
             top: 70px;
@@ -222,14 +222,14 @@
                 <span>TikTok Bot Dashboard</span>
             </div>
         </div>
-        <div>
+        <div id="authContainer">
             <a href="https://discord.com/oauth2/authorize?client_id=1544289467853045861&response_type=code&redirect_uri=https%3A%2F%2Ftiktok-bot-2s2-dashboard.onrender.com%2Fcallback&scope=identify+guilds" class="btn-login">
                 <i class="fa-brands fa-discord"></i> تسجيل الدخول
             </a>
         </div>
     </header>
 
-    <!-- القائمة الجانبية (تفتح بالزر) -->
+    <!-- القائمة الجانبية -->
     <aside class="sidebar" id="sidebar">
         <ul class="nav-list">
             <li><a class="nav-item active" onclick="switchTab('settings', this)"><i class="fa-solid fa-sliders"></i> الإعدادات</a></li>
@@ -307,7 +307,6 @@
     const menuBtn = document.getElementById('menuBtn');
     const sidebar = document.getElementById('sidebar');
 
-    // فتح وإغلاق القائمة عند الضغط على الثلاث نقاط
     menuBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         sidebar.classList.toggle('open');
@@ -319,7 +318,6 @@
         }
     });
 
-    // التنقل بين الأقسام
     function switchTab(tabName, el) {
         document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
         document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
@@ -329,13 +327,30 @@
         sidebar.classList.remove('open');
     }
 
+    // إدارة جلسة تسجيل الدخول
     const urlParams = new URLSearchParams(window.location.search);
-    const token = urlParams.get('token');
+    const tokenFromUrl = urlParams.get('token');
+    const authContainer = document.getElementById('authContainer');
+
+    if (tokenFromUrl) {
+        localStorage.setItem('discord_token', tokenFromUrl);
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
+
+    const currentToken = localStorage.getItem('discord_token');
+
+    if (currentToken && authContainer) {
+        authContainer.innerHTML = `
+            <a href="/" onclick="localStorage.removeItem('discord_token');" class="btn-login" style="background-color: #232329; border: 1px solid #3d3d4a;">
+                <i class="fa-solid fa-right-from-bracket"></i> تسجيل الخروج
+            </a>
+        `;
+    }
 
     async function loadData() {
-        if (!token) return;
+        if (!currentToken) return;
         try {
-            const res = await fetch(`/api/config?token=${token}`);
+            const res = await fetch(`/api/config?token=${currentToken}`);
             const config = await res.json();
             if (config) {
                 if(config.tiktok_username) document.getElementById('tiktok_username').value = config.tiktok_username;
@@ -357,6 +372,8 @@
             setTimeout(() => el.style.display = 'none', 4000);
         };
 
+        const activeToken = currentToken || 'demo';
+
         const payload = {
             guild_id: document.getElementById('guild_id').value || "1",
             tiktok_username: document.getElementById('tiktok_username').value.replace('@', '').trim(),
@@ -365,7 +382,7 @@
         };
 
         try {
-            const res = await fetch(`/api/config?token=${token || 'demo'}`, {
+            const res = await fetch(`/api/config?token=${activeToken}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
