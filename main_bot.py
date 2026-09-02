@@ -2,13 +2,18 @@ import os
 import json
 import threading
 import requests
-import jwt
 from datetime import datetime, timedelta
 from flask import Flask, redirect, request, render_template_string
 import discord
 from discord.ext import commands
 from waitress import serve
 from werkzeug.middleware.proxy_fix import ProxyFix
+
+# حل مشكلة استيراد PyJWT بضمان الوصول للدوال المطلوبة
+try:
+    import jwt
+except ImportError:
+    from PyJWT import jwt
 
 # --------------------------------------------------
 # 1. الإعدادات وإدارة الحفظ
