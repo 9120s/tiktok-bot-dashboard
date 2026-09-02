@@ -12,10 +12,11 @@ from waitress import serve
 # -------------------------------------------------------------------
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "mysecretkey12345")
-
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = True
 CLIENT_ID = os.environ.get("CLIENT_ID", "")
 CLIENT_SECRET = os.environ.get("CLIENT_SECRET", "")
-REDIRECT_URI = os.environ.get("DISCORD_REDIRECT_URI", "")
+REDIRECT_URI = os.environ.get("REDIRECT_URI", "")
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
 
 API_BASE_URL = "https://discord.com/api/v10"
