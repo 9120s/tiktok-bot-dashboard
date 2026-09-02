@@ -6,14 +6,18 @@ from flask import Flask, redirect, session, request, render_template_string
 import discord
 from discord.ext import commands
 from waitress import serve
+from werkzeug.middleware.proxy_fix import ProxyFix
 
-# -------------------------------------------------------------------
+# --------------------------------------------------
 # 1. الإعدادات وإدارة الحفظ
-# -------------------------------------------------------------------
+# --------------------------------------------------
+
 app = Flask(__name__)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 app.secret_key = os.environ.get("SECRET_KEY", "mysecretkey12345")
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = True
+
 CLIENT_ID = os.environ.get("CLIENT_ID", "")
 CLIENT_SECRET = os.environ.get("CLIENT_SECRET", "")
 REDIRECT_URI = os.environ.get("REDIRECT_URI", "")
@@ -36,175 +40,89 @@ def save_configs():
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(GUILDS_CONFIG, f, ensure_ascii=False, indent=4)
     except Exception as e:
-        print(f"[Save Error] {e}")
+        print(f"[Config Save Error] {e}")
 
 GUILDS_CONFIG = load_configs()
 
-# -------------------------------------------------------------------
-# 2. إعداد بوت الديسكورد
-# -------------------------------------------------------------------
+# --------------------------------------------------
+# 2. إعدادات بوت ديسكورد (Discord Bot)
+# --------------------------------------------------
+
 intents = discord.Intents.default()
+intents.guilds = True
+intents.messages = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f"[Discord Bot] تم تسجيل الدخول بنجاح باسم: {bot.user}")
+    print(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
-async def send_top_active_users(guild_id):
-    config = GUILDS_CONFIG.get(str(guild_id))
-    if not config or not config.get("channel_id"):
-        return False
+def run_bot():
+    if BOT_TOKEN:
+        bot.run(BOT_TOKEN)
+    else:
+        print("Error: BOT_TOKEN is missing!")
 
-    try:
-        channel = bot.get_channel(int(config["channel_id"]))
-        if not channel:
-            channel = await bot.fetch_channel(int(config["channel_id"]))
-    except Exception as e:
-        print(f"[Channel Error] {e}")
-        return False
+# --------------------------------------------------
+# 3. لوحة التحكم (Flask Web Server)
+# --------------------------------------------------
 
-    embed = discord.Embed(
-        title=config.get("top_title", "🏆 إشعار البث المباشر"),
-        description="تم التحديث بنجاح من لوحة التحكم!",
-        color=discord.Color.from_rgb(254, 44, 85)
-    )
-    
-    try:
-        await channel.send(embed=embed)
-        return True
-    except Exception as e:
-        print(f"[Send Error] {e}")
-        return False
-
-# -------------------------------------------------------------------
-# 3. تصميم اللوحة
-# -------------------------------------------------------------------
 DASHBOARD_HTML = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>TikTok Dashboard</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <title>TikTok Bot Dashboard</title>
     <style>
-        * { box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; }
-        body { background-color: #121212; color: #ffffff; display: flex; height: 100vh; overflow: hidden; }
-        .sidebar { width: 260px; background-color: #000000; padding: 25px 20px; display: flex; flex-direction: column; justify-content: space-between; border-left: 1px solid #222222; }
-        .brand { font-size: 22px; font-weight: 800; color: #ffffff; margin-bottom: 35px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 10px; }
-        .brand i { color: #FE2C55; text-shadow: -2px 0 #25F4EE; }
-        .nav-links { list-style: none; }
-        .nav-links li { margin-bottom: 12px; }
-        .nav-links a { color: #a6a6a6; text-decoration: none; padding: 14px 18px; display: flex; align-items: center; gap: 12px; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; }
-        .nav-links a.active { background: linear-gradient(90deg, rgba(254,44,85,0.15) 0%, rgba(37,244,238,0.15) 100%); color: #ffffff; border-right: 4px solid #FE2C55; }
-        .main-content { flex: 1; padding: 40px; overflow-y: auto; background-color: #121212; }
-        .card { background-color: #1a1a1a; padding: 30px; border-radius: 16px; max-width: 650px; border: 1px solid #2a2a2a; box-shadow: 0 10px 30px rgba(0,0,0,0.5); margin-bottom: 25px; }
-        .form-group { margin-bottom: 22px; text-align: right; }
-        label { display: block; margin-bottom: 10px; color: #b0b0b0; font-size: 14px; }
-        input[type="text"], select { width: 100%; padding: 14px 18px; border-radius: 10px; border: 1px solid #333333; background-color: #000000; color: #ffffff; font-size: 15px; text-align: right; }
-        .btn-tiktok { background: linear-gradient(45deg, #FE2C55, #ff4468); color: #ffffff; padding: 14px 24px; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 10px; font-size: 15px; }
-        .btn-cyan { background: #25F4EE; color: #000000; padding: 14px 24px; border: none; border-radius: 10px; font-weight: 700; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; gap: 10px; font-size: 15px; margin-top: 15px; }
-        .user-info { display: flex; align-items: center; gap: 14px; padding-top: 20px; border-top: 1px solid #222222; }
-        .user-info img { border-radius: 50%; width: 48px; height: 48px; border: 2px solid #FE2C55; }
+        body { font-family: Arial, sans-serif; background-color: #121212; color: #ffffff; text-align: center; padding: 50px; }
+        .card { background-color: #1e1e1e; padding: 20px; border-radius: 10px; display: inline-block; box-shadow: 0 4px 8px rgba(0,0,0,0.5); }
+        .btn { background-color: #ff0050; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 15px; }
+        select, input { padding: 10px; margin: 10px 0; width: 80%; border-radius: 5px; border: none; }
     </style>
 </head>
 <body>
-    {% if user %}
-    <div class="sidebar">
-        <div>
-            <div class="brand"><i class="fa-brands fa-tiktok"></i><span>TikTok Bot</span></div>
-            <ul class="nav-links">
-                <li><a class="active"><i class="fa-solid fa-sliders"></i> الإعدادات العامة</a></li>
-            </ul>
-        </div>
-        <div class="user-info">
-            {% if user.avatar %}
-            <img src="https://cdn.discordapp.com/avatars/{{ user.id }}/{{ user.avatar }}.png" alt="Avatar">
-            {% else %}
-            <img src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Avatar">
-            {% endif %}
-            <div>
-                <p style="font-weight: 700; font-size: 14px;">{{ user.username }}</p>
-                <a href="/logout" style="color: #FE2C55; font-size: 12px; text-decoration: none; font-weight: 600;">تسجيل الخروج</a>
-            </div>
-        </div>
-    </div>
-
-    <div class="main-content">
-        <h1 style="margin-bottom: 25px; font-weight: 800; font-size: 26px;">⚙️ إعدادات البوت والسيرفرات</h1>
-        <div class="card">
+    <div class="card">
+        <h2>TikTok Bot 🎵</h2>
+        {% if not logged_in %}
+            <p>سجل الدخول بواسطة ديسكورد للتحكم باللوحة</p>
+            <a class="btn" href="/login">دخول بحساب Discord</a>
+        {% else %}
+            <h3>أهلاً بك، {{ user['username'] }}</h3>
             <form action="/save-settings" method="POST">
-                <div class="form-group">
-                    <label>اختر السيرفر:</label>
-                    <select name="guild_id" onchange="window.location.href='/?guild_id=' + this.value">
-                        {% for guild in guilds %}
-                            <option value="{{ guild.id }}" {% if selected_guild_id == guild.id %}selected{% endif %}>
-                                {{ guild.name }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>معرف قناة الديسكورد (Channel ID):</label>
-                    <input type="text" name="channel_id" value="{{ current_config.channel_id or '' }}" placeholder="123456789012345678" required>
-                </div>
-                <div class="form-group">
-                    <label>عنوان رسالة الإشعار:</label>
-                    <input type="text" name="top_title" value="{{ current_config.top_title or '🏆 إشعار البث المباشر' }}" required>
-                </div>
-                <button type="submit" class="btn-tiktok"><i class="fa-solid fa-check"></i> حفظ إعدادات السيرفر</button>
+                <label>اختر السيرفر:</label><br>
+                <select name="guild_id">
+                    {% for guild in guilds %}
+                        <option value="{{ guild['id'] }}">{{ guild['name'] }}</option>
+                    {% endfor %}
+                </select><br>
+
+                <label>رقم روم التنبيهات (Channel ID):</label><br>
+                <input type="text" name="channel_id" placeholder="123456789..." required><br>
+
+                <label>عنوان التنبيه:</label><br>
+                <input type="text" name="top_title" placeholder="بث جديد للأن!"><br>
+
+                <button type="submit" class="btn">حفظ الإعدادات</button>
             </form>
-            
-            {% if selected_guild_id %}
-                <hr style="border-color: #222; margin: 25px 0;">
-                <a href="/trigger-top?guild_id={{ selected_guild_id }}" class="btn-cyan"><i class="fa-solid fa-paper-plane"></i> إرسال تجربة للقناة</a>
-            {% endif %}
-        </div>
+            <br>
+            <a href="/logout" style="color: #bbb;">تسجيل الخروج</a>
+        {% endif %}
     </div>
-    {% else %}
-    <div style="margin: auto; text-align: center;">
-        <div class="card" style="width: 380px;">
-            <div class="brand" style="margin-bottom: 20px;"><i class="fa-brands fa-tiktok" style="font-size: 32px;"></i><span style="font-size: 26px;">TikTok Bot</span></div>
-            <p style="color: #888888; margin-bottom: 25px;">سجل الدخول بواسطة ديسكورد للتحكم باللوحة</p>
-            <a href="/login" class="btn-tiktok" style="justify-content: center; width: 100%;"><i class="fa-brands fa-discord"></i> دخول بحساب Discord</a>
-        </div>
-    </div>
-    {% endif %}
 </body>
 </html>
 """
 
-# -------------------------------------------------------------------
-# 4. مسارات Flask
-# -------------------------------------------------------------------
 @app.route('/')
-def index():
-    user_guilds = session.get('guilds', [])
-    selected_guild_id = request.args.get('guild_id')
-    
-    if not selected_guild_id and user_guilds:
-        selected_guild_id = user_guilds[0]['id']
-        
-    current_config = GUILDS_CONFIG.get(str(selected_guild_id), {})
-
-    return render_template_string(
-        DASHBOARD_HTML,
-        user=session.get('user'),
-        guilds=user_guilds,
-        selected_guild_id=selected_guild_id,
-        current_config=current_config
-    )
+def home():
+    logged_in = 'user' in session
+    user = session.get('user', None)
+    guilds = session.get('guilds', [])
+    return render_template_string(DASHBOARD_HTML, logged_in=logged_in, user=user, guilds=guilds)
 
 @app.route('/login')
 def login():
-    scope = "identify guilds"
-    discord_auth_url = (
-        f"{API_BASE_URL}/oauth2/authorize"
-        f"?client_id={CLIENT_ID}"
-        f"&redirect_uri={REDIRECT_URI}"
-        f"&response_type=code"
-        f"&scope={scope}"
-    )
-    return redirect(discord_auth_url)
+    discord_login_url = f"https://discord.com/api/oauth2/authorize?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code&scope=identify%20guilds"
+    return redirect(discord_login_url)
 
 @app.route('/callback')
 def callback():
@@ -220,12 +138,13 @@ def callback():
         'redirect_uri': REDIRECT_URI
     }
     headers = {'Content-Type': 'application/x-www-form-urlencoded'}
-    
+
     try:
         token_res = requests.post(f"{API_BASE_URL}/oauth2/token", data=data, headers=headers)
         access_token = token_res.json().get('access_token')
 
         if not access_token:
+            print(f"[Auth Error Token Response]: {token_res.json()}")
             return redirect('/')
 
         user_headers = {'Authorization': f"Bearer {access_token}"}
@@ -237,12 +156,13 @@ def callback():
             for g in all_guilds:
                 permissions = int(g.get('permissions', 0))
                 if (permissions & 0x8) == 0x8 or g.get('owner', False):
-                    filtered_guilds.append({'id': g['id'], 'name': g['name'], 'icon': g.get('icon')})
+                    filtered_guilds.append({'id': str(g['id']), 'name': g['name'], 'icon': g.get('icon')})
 
         session['user'] = {'id': user_data.get('id'), 'username': user_data.get('username'), 'avatar': user_data.get('avatar')}
         session['guilds'] = filtered_guilds
+
     except Exception as e:
-        print(f"[Auth Error] {e}")
+        print(f"[Auth Exception Error]: {e}")
 
     return redirect('/')
 
@@ -262,31 +182,22 @@ def save_settings():
         }
         save_configs()
         return redirect(f'/?guild_id={guild_id}')
-        
-    return redirect('/')
 
-@app.route('/trigger-top')
-def trigger_top():
-    guild_id = request.args.get('guild_id')
-    if 'user' in session and bot.loop and guild_id:
-        bot.loop.create_task(send_top_active_users(guild_id))
-    return redirect(f'/?guild_id={guild_id}')
+    return redirect('/')
 
 @app.route('/logout')
 def logout():
     session.clear()
     return redirect('/')
 
-# -------------------------------------------------------------------
-# 5. تشغيل التطبيق
-# -------------------------------------------------------------------
-def run_discord_bot():
-    if BOT_TOKEN:
-        try:
-            bot.run(BOT_TOKEN)
-        except Exception as e:
-            print(f"[Discord Bot Error] {e}") 
-    if __name__ == '__main__': 
-        threading.Thread(target=run_discord_bot, daemon=True).start()
-        port = int(os.environ.get("PORT", 10000))
-        serve(app, host='0.0.0.0', port=port)
+# --------------------------------------------------
+# 4. تشغيل البوت واللوحة معاً
+# --------------------------------------------------
+
+if __name__ == '__main__':
+    bot_thread = threading.Thread(target=run_bot)
+    bot_thread.daemon = True
+    bot_thread.start()
+
+    port = int(os.environ.get("PORT", 10000))
+    serve(app, host='0.0.0.0', port=port)
