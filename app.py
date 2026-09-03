@@ -66,6 +66,7 @@ def save_configs_db(guild_id, tiktok_user, channel_id):
         except Exception as e:
             print(f"❌ Error saving to Supabase: {e}")
 
+    # fallback للملف المحلي
     configs = load_configs()
     configs[str(guild_id)] = {"tiktok_user": tiktok_user, "channel_id": channel_id}
     try:
@@ -110,12 +111,12 @@ def send_discord_alert(channel_id, tiktok_user, is_test=False):
         content = ""
         title = f"⚙️ تم الربط بنجاح! - {tiktok_user}"
         desc = f"حساب **@{tiktok_user}** متصل الآن وسيرسل إشعار فور بدء البث."
-        color = 4898432
+        color = 4898432  # أخضر
     else:
         content = "@everyone 🔴 بدأ بث جديد حياكم!"
         title = f"TikTok Live - {tiktok_user}"
         desc = f"الآن في بث مباشر على TikTok! 🔴\n\n[اضغط هنا للإنضمام للبث](https://www.tiktok.com/@{tiktok_user}/live)"
-        color = 16657493
+        color = 16657493  # وردي
 
     payload = {
         "content": content,
@@ -474,8 +475,10 @@ def save_settings():
 
     save_configs_db(guild_id, tiktok_user, channel_id)
 
+    # إرسال رسالة الربط التأكيدية
     sent, details = send_discord_alert(channel_id, tiktok_user, is_test=True)
 
+    # الفحص الفوري للحساب: إن كان فاتحاً للبث حالياً، يتم إرسال إشعار البث ومعه رابط البث فوراً
     def check_initial_live():
         try:
             client = TikTokLiveClient(unique_id=tiktok_user)
