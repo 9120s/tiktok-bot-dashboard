@@ -7,7 +7,6 @@ import discord
 from discord.ext import commands
 from flask import Flask, request, jsonify, redirect, render_template_string
 from TikTokLive import TikTokLiveClient
-from TikTokLive.events import LiveConnectEvent
 
 app = Flask(__name__)
 
@@ -102,8 +101,8 @@ def send_discord_alert(channel_id, tiktok_user, is_test=False):
 async def start_tiktok_listener(tiktok_user, channel_id):
     client = TikTokLiveClient(unique_id=tiktok_user)
 
-    @client.on(LiveConnectEvent)
-    async def on_connect(event: LiveConnectEvent):
+    @client.on("connect")
+    async def on_connect(event):
         print(f"🔴 [LIVE CONNECTED] الحساب @{tiktok_user} فتح بث مباشر الآن!")
         send_discord_alert(channel_id, tiktok_user, is_test=False)
 
