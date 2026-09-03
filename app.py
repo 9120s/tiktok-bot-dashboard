@@ -1,5 +1,4 @@
 import os
-import time
 import json
 import asyncio
 import threading
@@ -7,6 +6,8 @@ import requests
 import discord
 from discord.ext import commands
 from flask import Flask, request, jsonify, redirect, render_template_string
+from TikTokLive import TikTokLiveClient
+from TikTokLive.events import LiveConnectEvent
 
 app = Flask(__name__)
 
@@ -17,7 +18,6 @@ SERVER_INVITE_URL = os.getenv("SERVER_INVITE_URL", "https://discord.gg/TQUFzyxM7
 
 CONFIG_FILE = "configs.json"
 
-# --- دمج وإدارة الحفظ التلقائي في ملف JSON ---
 def load_configs():
     if os.path.exists(CONFIG_FILE):
         try:
@@ -35,7 +35,7 @@ def save_configs(configs):
         print(f"❌ Error saving config file: {e}")
 
 SAVED_CONFIGS = load_configs()
-LAST_LIVE_STATUS = {}
+ACTIVE_TIKTOK_CLIENTS = {}
 
 # --- تشغيل بوت ديسكورد ---
 intents = discord.Intents.default()
@@ -73,9 +73,9 @@ def send_discord_alert(channel_id, tiktok_user, is_test=False):
         desc = f"حساب **@{tiktok_user}** متصل الآن وسيرسل إشعار فور بدء البث."
         color = 4898432  # أخضر
     else:
-        content = "@everyone 🔴 معاً بدأ بث جديد حياكم!"
+        content = "@everyone 🔴 بدأ بث جديد حياكم!"
         title = f"TikTok Live - {tiktok_user}"
-        desc = f"معاً الآن في بث مباشر على TikTok! 🔴\n\n[اضغط هنا للإنضمام للبث](https://www.tiktok.com/@{tiktok_user}/live)"
+        desc = f"الآن في بث مباشر على TikTok! 🔴\n\n[اضغط هنا للإنضمام للبث](https://www.tiktok.com/@{tiktok_user}/live)"
         color = 16657493  # وردي
 
     payload = {
@@ -89,7 +89,7 @@ def send_discord_alert(channel_id, tiktok_user, is_test=False):
     }
     try:
         res = requests.post(url, json=payload, headers=headers, timeout=10)
-        print(f"📡 [DISCORD RESP] Channel: {clean_channel_id} | Code: {res.status_code} | Body: {res.text}")
+        print(f"📡 [DISCORD RESP] Channel: {clean_channel_id} | Code: {res.status_code}")
         if res.status_code in [200, 201]:
             return True, "OK"
         else:
@@ -98,46 +98,44 @@ def send_discord_alert(channel_id, tiktok_user, is_test=False):
         print(f"❌ [DISCORD SEND EXCEPTION] {e}")
         return False, str(e)
 
-# --- فحص حالة البث ---
-def check_tiktok_live_status(tiktok_user):
-    url = f"https://www.tiktok.com/@{tiktok_user}/live"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-    try:
-        res = requests.get(url, headers=headers, timeout=8)
-        if res.status_code == 200 and ('"status":2' in res.text or 'live-room' in res.url or 'LIVE' in res.text):
-            return True
-    except Exception:
-        pass
-    return False
+# --- محرك المراقبة عبر TikTokLive ---
+async def start_tiktok_listener(tiktok_user, channel_id):
+    client = TikTokLiveClient(unique_id=tiktok_user)
 
-# --- محرك المراقبة الشامل لجميع السيرفرات ---
-def background_checker():
-    while True:
-        try:
-            current_configs = load_configs()
-            for guild_id, data in current_configs.items():
+    @client.on(LiveConnectEvent)
+    async def on_connect(event: LiveConnectEvent):
+        print(f"🔴 [LIVE CONNECTED] الحساب @{tiktok_user} فتح بث مباشر الآن!")
+        send_discord_alert(channel_id, tiktok_user, is_test=False)
+
+    try:
+        await client.start()
+    except Exception as e:
+        print(f"⚠️ [TIKTOK LISTEN CLOSED] @{tiktok_user}: {e}")
+
+def tiktok_monitor_thread():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    async def main_loop():
+        while True:
+            configs = load_configs()
+            for guild_id, data in configs.items():
                 tiktok_user = data.get("tiktok_user")
                 channel_id = data.get("channel_id")
                 
                 if tiktok_user and channel_id:
-                    is_live = check_tiktok_live_status(tiktok_user)
-                    was_live = LAST_LIVE_STATUS.get(guild_id, False)
+                    key = f"{guild_id}_{tiktok_user}"
+                    if key not in ACTIVE_TIKTOK_CLIENTS or not ACTIVE_TIKTOK_CLIENTS[key].is_alive():
+                        print(f"🔍 [MONITOR] بدء مراقبة الحساب @{tiktok_user} للسيرفر {guild_id}")
+                        t = threading.Thread(target=lambda: asyncio.run(start_tiktok_listener(tiktok_user, channel_id)), daemon=True)
+                        t.start()
+                        ACTIVE_TIKTOK_CLIENTS[key] = t
+                        
+            await asyncio.sleep(60)
 
-                    if is_live and not was_live:
-                        print(f"🔴 [LIVE DETECTED] @{tiktok_user} فتح بث! جاري الإرسال للسيرفر {guild_id} الروم {channel_id}...")
-                        send_discord_alert(channel_id, tiktok_user, is_test=False)
-                        LAST_LIVE_STATUS[guild_id] = True
-                    elif not is_live and was_live:
-                        LAST_LIVE_STATUS[guild_id] = False
+    loop.run_until_complete(main_loop())
 
-        except Exception as e:
-            print(f"⚠️ Loop Error: {e}")
-        
-        time.sleep(30)
-
-threading.Thread(target=background_checker, daemon=True).start()
+threading.Thread(target=tiktok_monitor_thread, daemon=True).start()
 
 # --- HTML Layout ---
 
@@ -188,14 +186,6 @@ HTML_LAYOUT = """
         .saved-servers-list { list-style: none; display: flex; flex-direction: column; gap: 6px; max-height: 150px; overflow-y: auto; }
         .saved-server-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #18181b; border-radius: 6px; font-size: 0.85rem; border: 1px solid var(--border-color); }
 
-        .top3-sidebar-list { list-style: none; display: flex; flex-direction: column; gap: 6px; }
-        .top3-sidebar-item {
-            background: #18181b; border: 1px solid var(--border-color); border-radius: 8px;
-            padding: 8px 12px; display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem;
-        }
-        .top3-sidebar-item .user { font-weight: bold; color: var(--tiktok-cyan); }
-        .top3-sidebar-item .server-id { font-size: 0.75rem; color: var(--text-muted); }
-
         .join-server-btn {
             background: linear-gradient(45deg, var(--tiktok-pink), var(--tiktok-cyan));
             color: #000 !important; font-weight: 800 !important; text-align: center; justify-content: center;
@@ -243,11 +233,6 @@ HTML_LAYOUT = """
             <ul class="saved-servers-list" id="savedServersMenu">
                 <li style="color:var(--text-muted); font-size:0.8rem; text-align:center;">جاري التحميل...</li>
             </ul>
-
-            <div class="section-title"><i class="fa-solid fa-crown"></i> أفضل ثوالث</div>
-            <ul class="top3-sidebar-list" id="top3SidebarMenu">
-                <li style="color:var(--text-muted); font-size:0.8rem; text-align:center;">لا توجد بيانات</li>
-            </ul>
         </div>
 
         <ul class="nav-menu" style="margin-top: 1.5rem;">
@@ -282,30 +267,17 @@ HTML_LAYOUT = """
                 .then(res => res.json())
                 .then(data => {
                     const menu = document.getElementById('savedServersMenu');
-                    const top3Menu = document.getElementById('top3SidebarMenu');
-
                     if (data.configs && data.configs.length > 0) {
                         menu.innerHTML = '';
-                        top3Menu.innerHTML = '';
-
-                        data.configs.forEach((item, index) => {
+                        data.configs.forEach((item) => {
                             menu.innerHTML += `
                                 <li class="saved-server-item">
                                     <span><i class="fa-solid fa-hashtag"></i> ${item.guild_id}</span>
                                     <strong style="color:var(--tiktok-cyan)">@${item.tiktok_user}</strong>
                                 </li>`;
-
-                            if (index < 3) {
-                                top3Menu.innerHTML += `
-                                    <li class="top3-sidebar-item">
-                                        <span class="user">@${item.tiktok_user}</span>
-                                        <span class="server-id">${item.guild_id}</span>
-                                    </li>`;
-                            }
                         });
                     } else {
                         menu.innerHTML = '<li style="color:var(--text-muted); font-size:0.8rem; text-align:center; padding:5px;">لا توجد سيرفرات محفوظة</li>';
-                        top3Menu.innerHTML = '<li style="color:var(--text-muted); font-size:0.8rem; text-align:center; padding:5px;">لا توجد ثوالث حالياً</li>';
                     }
                 });
         }
@@ -327,8 +299,8 @@ HTML_LAYOUT = """
                                 <select id="guildSelect">`;
                         data.guilds.forEach(g => { html += `<option value="${g.id}">${g.name}</option>`; });
                         html += `</select></div>
-                            <div style="text-align: center; margin: 10px 0;"><span class="status-badge"><i class="fa-solid fa-bolt"></i> المراقبة التلقائية تعمل في الخلفية 🔥</span></div>
-                            <div class="form-group"><label>يوزر التيك توك (TikTok Username):</label><input type="text" id="tiktokUser" placeholder="مثال: 2vce4"></div>
+                            <div style="text-align: center; margin: 10px 0;"><span class="status-badge"><i class="fa-solid fa-bolt"></i> المراقبة المباشرة تعمل الآن 🔥</span></div>
+                            <div class="form-group"><label>يوزر التيك توك (TikTok Username):</label><input type="text" id="tiktokUser" placeholder="مثال: os_in7"></div>
                             <div class="form-group"><label>رقم/آيدي روم التنبيهات (Channel ID):</label><input type="text" id="channelId" placeholder="مثال: 1538986763622813766"></div>
                             
                             <button onclick="saveSettings()" class="btn-tiktok"><i class="fa-solid fa-floppy-disk"></i> حفظ وتفعيل التنبيه الآلي</button>
@@ -362,10 +334,10 @@ HTML_LAYOUT = """
             .then(res => res.json())
             .then(data => {
                 if(data.success && data.sent) {
-                    msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-circle-check"></i> تم الربط بنجاح! تم إرسال الرسالة التجريبية لـ ديسكورد.</div>';
+                    msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-circle-check"></i> تم الربط وبدء المراقبة بنجاح!</div>';
                     reloadSidebar();
                 } else {
-                    msgDiv.innerHTML = '<div class="error"><i class="fa-solid fa-triangle-exclamation"></i> فشل إرسال الرسالة في السيرفر! سبب الخطأ: ' + data.details + '</div>';
+                    msgDiv.innerHTML = '<div class="error"><i class="fa-solid fa-triangle-exclamation"></i> فشل إرسال الرسالة! السبب: ' + data.details + '</div>';
                     reloadSidebar();
                 }
             });
@@ -461,12 +433,10 @@ def save_settings():
     tiktok_user = data.get('tiktok_user', '').replace('@', '').strip()
     channel_id = str(data.get('channel_id', '')).strip()
 
-    # حفظ وإضافة السيرفر مع السيرفرات السابقة دون مسحها
     configs = load_configs()
     configs[guild_id] = {"tiktok_user": tiktok_user, "channel_id": channel_id}
     save_configs(configs)
 
-    # إرسال الرسالة التجريبية لتأكيد الربط
     sent, details = send_discord_alert(channel_id, tiktok_user, is_test=True)
 
     return jsonify({"success": sent, "sent": sent, "details": details})
