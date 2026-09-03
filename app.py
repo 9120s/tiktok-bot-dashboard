@@ -7,6 +7,7 @@ import discord
 from discord.ext import commands
 from flask import Flask, request, jsonify, redirect, render_template_string
 from TikTokLive import TikTokLiveClient
+from supabase import create_client, Client
 
 app = Flask(__name__)
 
@@ -15,25 +16,64 @@ DISCORD_CLIENT_SECRET = os.getenv("CLIENT_SECRET", os.getenv("DISCORD_CLIENT_SEC
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 SERVER_INVITE_URL = os.getenv("SERVER_INVITE_URL", "https://discord.gg/TQUFzyxM7").strip()
 
+# --- إعدادات Supabase ---
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://ggevrddcmxlxvkjhsywy.supabase.co").strip()
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
+
+supabase: Client = None
+if SUPABASE_URL and SUPABASE_KEY:
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        print("✅ [SUPABASE] تم الاتصال بقاعدة البيانات بنجاح!")
+    except Exception as e:
+        print(f"❌ [SUPABASE ERROR] {e}")
+
 CONFIG_FILE = "configs.json"
 
 def load_configs():
+    if supabase:
+        try:
+            res = supabase.table("bot_configs").select("*").execute()
+            configs = {}
+            for row in res.data:
+                configs[row["guild_id"]] = {
+                    "tiktok_user": row["tiktok_user"],
+                    "channel_id": row["channel_id"]
+                }
+            return configs
+        except Exception as e:
+            print(f"⚠️ Error reading from Supabase: {e}")
+
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
-            print(f"⚠️ Error loading config file: {e}")
+            print(f"⚠️ Error loading local config file: {e}")
     return {}
 
-def save_configs(configs):
+def save_configs_db(guild_id, tiktok_user, channel_id):
+    if supabase:
+        try:
+            data = {
+                "guild_id": str(guild_id),
+                "tiktok_user": str(tiktok_user),
+                "channel_id": str(channel_id)
+            }
+            supabase.table("bot_configs").upsert(data).execute()
+            print(f"💾 [SUPABASE] تم حفظ البيانات للسيرفر: {guild_id}")
+            return
+        except Exception as e:
+            print(f"❌ Error saving to Supabase: {e}")
+
+    configs = load_configs()
+    configs[str(guild_id)] = {"tiktok_user": tiktok_user, "channel_id": channel_id}
     try:
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(configs, f, ensure_ascii=False, indent=4)
     except Exception as e:
         print(f"❌ Error saving config file: {e}")
 
-SAVED_CONFIGS = load_configs()
 ACTIVE_TIKTOK_CLIENTS = {}
 
 # --- تشغيل بوت ديسكورد ---
@@ -70,12 +110,12 @@ def send_discord_alert(channel_id, tiktok_user, is_test=False):
         content = ""
         title = f"⚙️ تم الربط بنجاح! - {tiktok_user}"
         desc = f"حساب **@{tiktok_user}** متصل الآن وسيرسل إشعار فور بدء البث."
-        color = 4898432  # أخضر
+        color = 4898432
     else:
         content = "@everyone 🔴 بدأ بث جديد حياكم!"
         title = f"TikTok Live - {tiktok_user}"
         desc = f"الآن في بث مباشر على TikTok! 🔴\n\n[اضغط هنا للإنضمام للبث](https://www.tiktok.com/@{tiktok_user}/live)"
-        color = 16657493  # وردي
+        color = 16657493
 
     payload = {
         "content": content,
@@ -432,14 +472,10 @@ def save_settings():
     tiktok_user = data.get('tiktok_user', '').replace('@', '').strip()
     channel_id = str(data.get('channel_id', '')).strip()
 
-    configs = load_configs()
-    configs[guild_id] = {"tiktok_user": tiktok_user, "channel_id": channel_id}
-    save_configs(configs)
+    save_configs_db(guild_id, tiktok_user, channel_id)
 
-    # إرسال رسالة الربط التأكيدية
     sent, details = send_discord_alert(channel_id, tiktok_user, is_test=True)
 
-    # الفحص الفوري للحساب: إن كان فاتحاً للبث حالياً، يتم إرسال إشعار البث ومعه رابط البث فوراً
     def check_initial_live():
         try:
             client = TikTokLiveClient(unique_id=tiktok_user)
