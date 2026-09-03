@@ -17,28 +17,28 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 SERVER_INVITE_URL = os.getenv("SERVER_INVITE_URL", "https://discord.gg/TQUFzyxM7").strip()
 
 SAVED_CONFIGS = {}
-ACTIVE_LISTENERS = {}
 
-# --- تشغيل بوت ديسكورد للظهور أونلاين 24/7 ---
+# --- تشغيل بوت ديسكورد ---
 intents = discord.Intents.default()
 discord_client = commands.Bot(command_prefix="!", intents=intents)
 
 @discord_client.event
 async def on_ready():
-    print(f'✅ البوت متصل ومفعل باسم: {discord_client.user}')
+    print(f'✅ [DISCORD] البوت متصل ومفعل باسم: {discord_client.user}')
 
 def run_discord_bot():
     if BOT_TOKEN:
         try:
             discord_client.run(BOT_TOKEN)
         except Exception as e:
-            print(f"[DISCORD BOT ERROR] {e}")
+            print(f"❌ [DISCORD ERROR] {e}")
 
 threading.Thread(target=run_discord_bot, daemon=True).start()
 
 # --- إرسال التنبيه لدسيکورد عبر API Bot ---
 def send_discord_alert(channel_id, tiktok_user, is_test=False):
     if not BOT_TOKEN:
+        print("❌ [DISCORD ALERT ERROR] BOT_TOKEN غير معرف!")
         return False
     
     url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
@@ -49,7 +49,7 @@ def send_discord_alert(channel_id, tiktok_user, is_test=False):
     
     desc = f"معاً الآن في بث مباشر على TikTok! 🔴\n\n[اضغط هنا للإنضمام للبث](https://www.tiktok.com/@{tiktok_user}/live)"
     if is_test:
-        desc = f"⚙️ **تم الربط بنجاح!**\nحساب **@{tiktok_user}** متصل الآن بالبث المباشر وسيرسل إشعار فور بدء البث."
+        desc = f"⚙️ **تم الربط بنجاح!**\nحساب **@{tiktok_user}** متصل الآن وسيرسل إشعار فور بدء البث."
 
     payload = {
         "content": "@everyone معاً بدأ بث جديد حياكم" if not is_test else "",
@@ -62,25 +62,27 @@ def send_discord_alert(channel_id, tiktok_user, is_test=False):
     }
     try:
         res = requests.post(url, json=payload, headers=headers, timeout=10)
+        print(f"📡 [DISCORD RESP] Code: {res.status_code} | Body: {res.text}")
         return res.status_code in [200, 201]
     except Exception as e:
-        print(f"[DISCORD SEND ERROR] {e}")
+        print(f"❌ [DISCORD SEND ERROR] {e}")
         return False
 
-# --- مراقبة الحساب فور فتح البث عبر الاتصال المستمر ---
+# --- مراقبة الحساب فور فتح البث ---
 async def start_tiktok_websocket(tiktok_user, channel_id):
+    print(f"🔄 [TIKTOK] بدء مراقبة الحساب: @{tiktok_user} للروم: {channel_id}")
     while True:
         try:
             client = TikTokLiveClient(unique_id=tiktok_user)
 
             @client.on(ConnectEvent)
             async def on_connect(event: ConnectEvent):
-                print(f"🔴 {tiktok_user} IS LIVE! Sending notification...")
+                print(f"🔴 [TIKTOK LIVE DETECTED] @{tiktok_user} أونلاين الآن! جاري إرسال الإشعار...")
                 send_discord_alert(channel_id, tiktok_user)
 
             await client.start()
         except Exception as e:
-            # إذا كان أوفلاين سيحدث خطأ اتصال، ننتظر 20 ثانية ثم نعيد المحاولة
+            print(f"⚠️ [TIKTOK CLIENT LOOP] @{tiktok_user} أوفلاين أو تعذر الاتصال: {e}")
             await asyncio.sleep(20)
 
 def run_async_listener(tiktok_user, channel_id):
@@ -310,8 +312,11 @@ HTML_LAYOUT = """
             })
             .then(res => res.json())
             .then(data => {
-                if(data.success) {
-                    msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-circle-check"></i> تم الحفظ وإرسال الرسالة التجريبية لـ ديسكورد!</div>';
+                if(data.success && data.message_sent) {
+                    msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-circle-check"></i> تم الحفظ وإرسال الرسالة التجريبية لـ ديسكورد بنجاح!</div>';
+                    reloadSidebar();
+                } else if(data.success && !data.message_sent) {
+                    msgDiv.innerHTML = '<div class="error"><i class="fa-solid fa-triangle-exclamation"></i> تم حفظ الإعدادات، لكن فشل إرسال التنبيه لدسيکورد! تأكد من وجود البوت في السيرفر وإعطائه صلاحية Send Messages و Embed Links للروم.</div>';
                     reloadSidebar();
                 } else {
                     msgDiv.innerHTML = '<div class="error">حدث خطأ أثناء حفظ الإعدادات!</div>';
@@ -410,15 +415,14 @@ def save_settings():
 
     SAVED_CONFIGS[guild_id] = {"tiktok_user": tiktok_user, "channel_id": channel_id}
 
-    # إرسال رسالة اختباريّة للتأكد من وصول الرسائل للروم فور الحفظ
-    send_discord_alert(channel_id, tiktok_user, is_test=True)
+    # إرسال رسالة اختبارية للتحقق من الصلاحيات والوصول للروم
+    sent = send_discord_alert(channel_id, tiktok_user, is_test=True)
 
-    # تشغيل مراقب الـ WebSocket للبث المباشر
+    # تشغيل المراقب في خلفية الاستضافة
     t = threading.Thread(target=run_async_listener, args=(tiktok_user, channel_id), daemon=True)
     t.start()
-    ACTIVE_LISTENERS[guild_id] = t
 
-    return jsonify({"success": True})
+    return jsonify({"success": True, "message_sent": sent})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
