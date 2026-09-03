@@ -5,3 +5,4 @@ waitress
 werkzeug
 PyJWT
 TikTokLive
+supabase
