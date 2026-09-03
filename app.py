@@ -332,7 +332,7 @@ HTML_LAYOUT = """
             })
             .then(res => res.json())
             .then(data => {
-                if(data.success && data.sent) {
+                if(data.success) {
                     msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-circle-check"></i> تم الربط وبدء المراقبة بنجاح!</div>';
                     reloadSidebar();
                 } else {
@@ -436,9 +436,27 @@ def save_settings():
     configs[guild_id] = {"tiktok_user": tiktok_user, "channel_id": channel_id}
     save_configs(configs)
 
+    # إرسال رسالة الربط التأكيدية
     sent, details = send_discord_alert(channel_id, tiktok_user, is_test=True)
 
-    return jsonify({"success": sent, "sent": sent, "details": details})
+    # الفحص الفوري للحساب: إن كان فاتحاً للبث حالياً، يتم إرسال إشعار البث ومعه رابط البث فوراً
+    def check_initial_live():
+        try:
+            client = TikTokLiveClient(unique_id=tiktok_user)
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            async def run_check():
+                if await client.is_live():
+                    send_discord_alert(channel_id, tiktok_user, is_test=False)
+                    
+            loop.run_until_complete(run_check())
+        except Exception as e:
+            print(f"⚠️ Check initial live error: {e}")
+
+    threading.Thread(target=check_initial_live, daemon=True).start()
+
+    return jsonify({"success": sent, "details": details})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
