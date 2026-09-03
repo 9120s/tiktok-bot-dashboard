@@ -6,8 +6,6 @@ import requests
 import discord
 from discord.ext import commands
 from flask import Flask, request, jsonify, redirect, render_template_string
-from TikTokLive import TikTokLiveClient
-from TikTokLive.events import ConnectEvent
 
 app = Flask(__name__)
 
@@ -17,6 +15,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 SERVER_INVITE_URL = os.getenv("SERVER_INVITE_URL", "https://discord.gg/TQUFzyxM7").strip()
 
 SAVED_CONFIGS = {}
+LAST_LIVE_STATUS = {}
 
 # --- تشغيل بوت ديسكورد ---
 intents = discord.Intents.default()
@@ -24,7 +23,7 @@ discord_client = commands.Bot(command_prefix="!", intents=intents)
 
 @discord_client.event
 async def on_ready():
-    print(f'✅ [DISCORD] البوت متصل ومفعل باسم: {discord_client.user}')
+    print(f'✅ [DISCORD] البوت متصل باسم: {discord_client.user}')
 
 def run_discord_bot():
     if BOT_TOKEN:
@@ -35,60 +34,90 @@ def run_discord_bot():
 
 threading.Thread(target=run_discord_bot, daemon=True).start()
 
-# --- إرسال التنبيه لدسيکورد عبر API Bot ---
+# --- دالة إرسال التنبيهات للديسكورد ---
 def send_discord_alert(channel_id, tiktok_user, is_test=False):
     if not BOT_TOKEN:
-        print("❌ [DISCORD ALERT ERROR] BOT_TOKEN غير معرف!")
-        return False
+        print("❌ [ALERT ERROR] BOT_TOKEN غير مضاف!")
+        return False, "BOT_TOKEN_MISSING"
     
-    url = f"https://discord.com/api/v10/channels/{channel_id}/messages"
+    # تنظيف آيدي الروم من أي مسافات مخفية
+    clean_channel_id = str(channel_id).strip()
+    url = f"https://discord.com/api/v10/channels/{clean_channel_id}/messages"
     headers = {
         "Authorization": f"Bot {BOT_TOKEN}",
         "Content-Type": "application/json"
     }
     
-    desc = f"معاً الآن في بث مباشر على TikTok! 🔴\n\n[اضغط هنا للإنضمام للبث](https://www.tiktok.com/@{tiktok_user}/live)"
     if is_test:
-        desc = f"⚙️ **تم الربط بنجاح!**\nحساب **@{tiktok_user}** متصل الآن وسيرسل إشعار فور بدء البث."
+        content = ""
+        title = f"⚙️ تم الربط بنجاح! - {tiktok_user}"
+        desc = f"حساب **@{tiktok_user}** متصل الآن وسيرسل إشعار فور بدء البث."
+        color = 4898432  # أخضر
+    else:
+        content = "@everyone 🔴 معاً بدأ بث جديد حياكم!"
+        title = f"TikTok Live - {tiktok_user}"
+        desc = f"معاً الآن في بث مباشر على TikTok! 🔴\n\n[اضغط هنا للإنضمام للبث](https://www.tiktok.com/@{tiktok_user}/live)"
+        color = 16657493  # وردي
 
     payload = {
-        "content": "@everyone معاً بدأ بث جديد حياكم" if not is_test else "",
+        "content": content,
         "embeds": [{
-            "title": f"TikTok Live - {tiktok_user}",
+            "title": title,
             "description": desc,
-            "color": 16657493 if not is_test else 4898432,
+            "color": color,
             "footer": {"text": "TikTok Live Notification"}
         }]
     }
     try:
         res = requests.post(url, json=payload, headers=headers, timeout=10)
-        print(f"📡 [DISCORD RESP] Code: {res.status_code} | Body: {res.text}")
-        return res.status_code in [200, 201]
+        print(f"📡 [DISCORD RESP] Channel: {clean_channel_id} | Code: {res.status_code} | Body: {res.text}")
+        if res.status_code in [200, 201]:
+            return True, "OK"
+        else:
+            return False, f"HTTP_{res.status_code}: {res.text}"
     except Exception as e:
-        print(f"❌ [DISCORD SEND ERROR] {e}")
-        return False
+        print(f"❌ [DISCORD SEND EXCEPTION] {e}")
+        return False, str(e)
 
-# --- مراقبة الحساب فور فتح البث ---
-async def start_tiktok_websocket(tiktok_user, channel_id):
-    print(f"🔄 [TIKTOK] بدء مراقبة الحساب: @{tiktok_user} للروم: {channel_id}")
+# --- فحص حالة البث ---
+def check_tiktok_live_status(tiktok_user):
+    url = f"https://www.tiktok.com/@{tiktok_user}/live"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    try:
+        res = requests.get(url, headers=headers, timeout=8)
+        if res.status_code == 200 and ('"status":2' in res.text or 'live-room' in res.url or 'LIVE' in res.text):
+            return True
+    except Exception:
+        pass
+    return False
+
+# --- محرك المراقبة ---
+def background_checker():
     while True:
         try:
-            client = TikTokLiveClient(unique_id=tiktok_user)
+            for guild_id, data in list(SAVED_CONFIGS.items()):
+                tiktok_user = data.get("tiktok_user")
+                channel_id = data.get("channel_id")
+                
+                if tiktok_user and channel_id:
+                    is_live = check_tiktok_live_status(tiktok_user)
+                    was_live = LAST_LIVE_STATUS.get(guild_id, False)
 
-            @client.on(ConnectEvent)
-            async def on_connect(event: ConnectEvent):
-                print(f"🔴 [TIKTOK LIVE DETECTED] @{tiktok_user} أونلاين الآن! جاري إرسال الإشعار...")
-                send_discord_alert(channel_id, tiktok_user)
+                    if is_live and not was_live:
+                        print(f"🔴 [LIVE DETECTED] @{tiktok_user} فتح بث! جاري إرسال التنبيه للروم {channel_id}...")
+                        send_discord_alert(channel_id, tiktok_user, is_test=False)
+                        LAST_LIVE_STATUS[guild_id] = True
+                    elif not is_live and was_live:
+                        LAST_LIVE_STATUS[guild_id] = False
 
-            await client.start()
         except Exception as e:
-            print(f"⚠️ [TIKTOK CLIENT LOOP] @{tiktok_user} أوفلاين أو تعذر الاتصال: {e}")
-            await asyncio.sleep(20)
+            print(f"⚠️ Loop Error: {e}")
+        
+        time.sleep(30)
 
-def run_async_listener(tiktok_user, channel_id):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(start_tiktok_websocket(tiktok_user, channel_id))
+threading.Thread(target=background_checker, daemon=True).start()
 
 # --- HTML Layout ---
 
@@ -312,14 +341,12 @@ HTML_LAYOUT = """
             })
             .then(res => res.json())
             .then(data => {
-                if(data.success && data.message_sent) {
-                    msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-circle-check"></i> تم الحفظ وإرسال الرسالة التجريبية لـ ديسكورد بنجاح!</div>';
-                    reloadSidebar();
-                } else if(data.success && !data.message_sent) {
-                    msgDiv.innerHTML = '<div class="error"><i class="fa-solid fa-triangle-exclamation"></i> تم حفظ الإعدادات، لكن فشل إرسال التنبيه لدسيکورد! تأكد من وجود البوت في السيرفر وإعطائه صلاحية Send Messages و Embed Links للروم.</div>';
+                if(data.success && data.sent) {
+                    msgDiv.innerHTML = '<div class="success"><i class="fa-solid fa-circle-check"></i> تم الربط بنجاح! تم إرسال الرسالة التجريبية لـ ديسكورد.</div>';
                     reloadSidebar();
                 } else {
-                    msgDiv.innerHTML = '<div class="error">حدث خطأ أثناء حفظ الإعدادات!</div>';
+                    msgDiv.innerHTML = '<div class="error"><i class="fa-solid fa-triangle-exclamation"></i> فشل إرسال الرسالة في السيرفر! سبب الخطأ: ' + data.details + '</div>';
+                    reloadSidebar();
                 }
             });
         }
@@ -415,14 +442,10 @@ def save_settings():
 
     SAVED_CONFIGS[guild_id] = {"tiktok_user": tiktok_user, "channel_id": channel_id}
 
-    # إرسال رسالة اختبارية للتحقق من الصلاحيات والوصول للروم
-    sent = send_discord_alert(channel_id, tiktok_user, is_test=True)
+    # اختبار إرسال الرسالة وإرجاع النتيجة التفصيلية
+    sent, details = send_discord_alert(channel_id, tiktok_user, is_test=True)
 
-    # تشغيل المراقب في خلفية الاستضافة
-    t = threading.Thread(target=run_async_listener, args=(tiktok_user, channel_id), daemon=True)
-    t.start()
-
-    return jsonify({"success": True, "message_sent": sent})
+    return jsonify({"success": sent, "sent": sent, "details": details})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 10000))
