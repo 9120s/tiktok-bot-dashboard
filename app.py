@@ -16,7 +16,6 @@ DISCORD_CLIENT_SECRET = os.getenv("CLIENT_SECRET", os.getenv("DISCORD_CLIENT_SEC
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 SERVER_INVITE_URL = os.getenv("SERVER_INVITE_URL", "https://discord.gg/TQUFzyxM7").strip()
 
-# --- إعدادات Supabase ---
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://ggevrddcmxlxvkjhsywy.supabase.co").strip()
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
 
@@ -37,8 +36,9 @@ def load_configs():
             configs = {}
             for row in res.data:
                 configs[row["guild_id"]] = {
-                    "tiktok_user": row["tiktok_user"],
-                    "channel_id": row["channel_id"]
+                    "platform": row.get("platform", "tiktok"),
+                    "streamer_user": row.get("tiktok_user", ""),
+                    "channel_id": row.get("channel_id", "")
                 }
             return configs
         except Exception as e:
@@ -52,13 +52,14 @@ def load_configs():
             print(f"⚠️ Error loading local config file: {e}")
     return {}
 
-def save_configs_db(guild_id, tiktok_user, channel_id):
+def save_configs_db(guild_id, streamer_user, channel_id, platform="tiktok"):
     if supabase:
         try:
             data = {
                 "guild_id": str(guild_id),
-                "tiktok_user": str(tiktok_user),
-                "channel_id": str(channel_id)
+                "tiktok_user": str(streamer_user),
+                "channel_id": str(channel_id),
+                "platform": str(platform)
             }
             supabase.table("bot_configs").upsert(data).execute()
             print(f"💾 [SUPABASE] تم حفظ البيانات للسيرفر: {guild_id}")
@@ -66,18 +67,16 @@ def save_configs_db(guild_id, tiktok_user, channel_id):
         except Exception as e:
             print(f"❌ Error saving to Supabase: {e}")
 
-    # fallback للملف المحلي
     configs = load_configs()
-    configs[str(guild_id)] = {"tiktok_user": tiktok_user, "channel_id": channel_id}
+    configs[str(guild_id)] = {"platform": platform, "tiktok_user": streamer_user, "channel_id": channel_id}
     try:
         with open(CONFIG_FILE, "w", encoding="utf-8") as f:
             json.dump(configs, f, ensure_ascii=False, indent=4)
     except Exception as e:
         print(f"❌ Error saving config file: {e}")
 
-ACTIVE_TIKTOK_CLIENTS = {}
+ACTIVE_CLIENTS = {}
 
-# --- تشغيل بوت ديسكورد ---
 intents = discord.Intents.default()
 discord_client = commands.Bot(command_prefix="!", intents=intents)
 
@@ -94,10 +93,8 @@ def run_discord_bot():
 
 threading.Thread(target=run_discord_bot, daemon=True).start()
 
-# --- دالة إرسال التنبيهات للديسكورد ---
-def send_discord_alert(channel_id, tiktok_user, is_test=False):
+def send_discord_alert(channel_id, streamer_user, platform="tiktok", is_test=False):
     if not BOT_TOKEN:
-        print("❌ [ALERT ERROR] BOT_TOKEN غير مضاف!")
         return False, "BOT_TOKEN_MISSING"
     
     clean_channel_id = str(channel_id).strip()
@@ -106,17 +103,29 @@ def send_discord_alert(channel_id, tiktok_user, is_test=False):
         "Authorization": f"Bot {BOT_TOKEN}",
         "Content-Type": "application/json"
     }
-    
+
+    if platform == "twitch":
+        stream_url = f"https://www.twitch.tv/{streamer_user}"
+        platform_name = "Twitch"
+        color = 9127187
+    elif platform == "kick":
+        stream_url = f"https://kick.com/{streamer_user}"
+        platform_name = "Kick"
+        color = 5570614
+    else:
+        stream_url = f"https://www.tiktok.com/@{streamer_user}/live"
+        platform_name = "TikTok"
+        color = 16657493
+
     if is_test:
         content = ""
-        title = f"⚙️ تم الربط بنجاح! - {tiktok_user}"
-        desc = f"حساب **@{tiktok_user}** متصل الآن وسيرسل إشعار فور بدء البث."
-        color = 4898432  # أخضر
+        title = f"⚙️ تم الربط بنجاح! - {platform_name}"
+        desc = f"حساب **@{streamer_user}** على منصة **{platform_name}** متصل الآن وسيرسل إشعار فور بدء البث."
+        color = 4898432
     else:
-        content = "@everyone 🔴 بدأ بث جديد حياكم!"
-        title = f"TikTok Live - {tiktok_user}"
-        desc = f"الآن في بث مباشر على TikTok! 🔴\n\n[اضغط هنا للإنضمام للبث](https://www.tiktok.com/@{tiktok_user}/live)"
-        color = 16657493  # وردي
+        content = f"@everyone 🔴 بدأ بث جديد على {platform_name}!"
+        title = f"{platform_name} Live - {streamer_user}"
+        desc = f"الآن في بث مباشر! 🔴\n\n[اضغط هنا للإنضمام للبث مباشرة]({stream_url})"
 
     payload = {
         "content": content,
@@ -124,35 +133,30 @@ def send_discord_alert(channel_id, tiktok_user, is_test=False):
             "title": title,
             "description": desc,
             "color": color,
-            "footer": {"text": "TikTok Live Notification"}
+            "footer": {"text": f"{platform_name} Live Notification"}
         }]
     }
     try:
         res = requests.post(url, json=payload, headers=headers, timeout=10)
-        print(f"📡 [DISCORD RESP] Channel: {clean_channel_id} | Code: {res.status_code}")
         if res.status_code in [200, 201]:
             return True, "OK"
         else:
             return False, f"HTTP_{res.status_code}: {res.text}"
     except Exception as e:
-        print(f"❌ [DISCORD SEND EXCEPTION] {e}")
         return False, str(e)
 
-# --- محرك المراقبة عبر TikTokLive ---
-async def start_tiktok_listener(tiktok_user, channel_id):
-    client = TikTokLiveClient(unique_id=tiktok_user)
+async def start_tiktok_listener(streamer_user, channel_id, platform="tiktok"):
+    if platform == "tiktok":
+        client = TikTokLiveClient(unique_id=streamer_user)
+        @client.on("connect")
+        async def on_connect(event):
+            send_discord_alert(channel_id, streamer_user, platform, is_test=False)
+        try:
+            await client.start()
+        except Exception as e:
+            print(f"⚠️ [LIVE CLOSED] @{streamer_user}: {e}")
 
-    @client.on("connect")
-    async def on_connect(event):
-        print(f"🔴 [LIVE CONNECTED] الحساب @{tiktok_user} فتح بث مباشر الآن!")
-        send_discord_alert(channel_id, tiktok_user, is_test=False)
-
-    try:
-        await client.start()
-    except Exception as e:
-        print(f"⚠️ [TIKTOK LISTEN CLOSED] @{tiktok_user}: {e}")
-
-def tiktok_monitor_thread():
+def monitor_thread():
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
@@ -160,24 +164,22 @@ def tiktok_monitor_thread():
         while True:
             configs = load_configs()
             for guild_id, data in configs.items():
-                tiktok_user = data.get("tiktok_user")
+                streamer_user = data.get("streamer_user") or data.get("tiktok_user")
                 channel_id = data.get("channel_id")
+                platform = data.get("platform", "tiktok")
                 
-                if tiktok_user and channel_id:
-                    key = f"{guild_id}_{tiktok_user}"
-                    if key not in ACTIVE_TIKTOK_CLIENTS or not ACTIVE_TIKTOK_CLIENTS[key].is_alive():
-                        print(f"🔍 [MONITOR] بدء مراقبة الحساب @{tiktok_user} للسيرفر {guild_id}")
-                        t = threading.Thread(target=lambda: asyncio.run(start_tiktok_listener(tiktok_user, channel_id)), daemon=True)
+                if streamer_user and channel_id and platform == "tiktok":
+                    key = f"{guild_id}_{streamer_user}"
+                    if key not in ACTIVE_CLIENTS or not ACTIVE_CLIENTS[key].is_alive():
+                        t = threading.Thread(target=lambda: asyncio.run(start_tiktok_listener(streamer_user, channel_id, platform)), daemon=True)
                         t.start()
-                        ACTIVE_TIKTOK_CLIENTS[key] = t
+                        ACTIVE_CLIENTS[key] = t
                         
             await asyncio.sleep(60)
 
     loop.run_until_complete(main_loop())
 
-threading.Thread(target=tiktok_monitor_thread, daemon=True).start()
-
-# --- HTML Layout ---
+threading.Thread(target=monitor_thread, daemon=True).start()
 
 HTML_LAYOUT = """
 <!DOCTYPE html>
@@ -185,15 +187,14 @@ HTML_LAYOUT = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لوحة التحكم | TikTok Live</title>
+    <title>لوحة التحكم | Multi-Platform Live</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
         :root {
             --bg-main: #121212;
             --bg-sidebar: #000000;
             --bg-card: #1e1e1e;
-            --tiktok-pink: #fe2c55;
-            --tiktok-cyan: #25f4ee;
+            --primary: #fe2c55;
             --text-main: #ffffff;
             --text-muted: #a1a1aa;
             --border-color: #27272a;
@@ -211,7 +212,6 @@ HTML_LAYOUT = """
         .brand {
             display: flex; align-items: center; gap: 12px; font-size: 1.3rem; font-weight: 800;
             color: var(--text-main); padding-bottom: 1.5rem; border-bottom: 1px solid var(--border-color);
-            text-shadow: 2px 2px var(--tiktok-pink), -2px -2px var(--tiktok-cyan);
         }
 
         .section-title { font-size: 0.85rem; text-transform: uppercase; color: var(--text-muted); margin: 1.2rem 0 0.5rem 0; font-weight: bold; }
@@ -221,26 +221,26 @@ HTML_LAYOUT = """
             display: flex; align-items: center; gap: 12px; padding: 10px 14px;
             color: var(--text-muted); text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 0.95rem;
         }
-        .nav-item a:hover, .nav-item.active a { background: #27272a; color: var(--tiktok-cyan); }
+        .nav-item a:hover, .nav-item.active a { background: #27272a; color: #25f4ee; }
 
         .saved-servers-list { list-style: none; display: flex; flex-direction: column; gap: 6px; max-height: 150px; overflow-y: auto; }
         .saved-server-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #18181b; border-radius: 6px; font-size: 0.85rem; border: 1px solid var(--border-color); }
 
         .join-server-btn {
-            background: linear-gradient(45deg, var(--tiktok-pink), var(--tiktok-cyan));
+            background: linear-gradient(45deg, #fe2c55, #25f4ee);
             color: #000 !important; font-weight: 800 !important; text-align: center; justify-content: center;
         }
 
-        .auth-btn { background: rgba(254, 44, 85, 0.15); color: var(--tiktok-pink) !important; border: 1px solid var(--tiktok-pink); margin-bottom: 8px; text-align: center; justify-content: center; }
+        .auth-btn { background: rgba(254, 44, 85, 0.15); color: #fe2c55 !important; border: 1px solid #fe2c55; margin-bottom: 8px; text-align: center; justify-content: center; }
 
         .main-content { margin-right: 280px; flex: 1; padding: 2.5rem; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
         .card { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 16px; padding: 2.5rem; width: 100%; max-width: 550px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8); text-align: right; }
         .card h2 { text-align: center; font-size: 1.8rem; margin-bottom: 0.5rem; }
         .card p.desc { text-align: center; color: var(--text-muted); margin-bottom: 1.5rem; }
 
-        .btn-tiktok {
+        .btn-submit {
             display: inline-flex; align-items: center; justify-content: center; gap: 10px;
-            background: var(--tiktok-pink); color: #fff; padding: 14px 28px; border-radius: 10px;
+            background: #fe2c55; color: #fff; padding: 14px 28px; border-radius: 10px;
             font-weight: bold; font-size: 1rem; width: 100%; border: none; cursor: pointer; margin-top: 10px; text-decoration: none;
         }
 
@@ -248,8 +248,17 @@ HTML_LAYOUT = """
         .form-group label { display: block; margin-bottom: 6px; font-weight: bold; font-size: 0.95rem; }
         input[type="text"], select { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); background: #000; color: #fff; font-size: 0.95rem; outline: none; }
 
-        .status-badge { display: inline-block; background: rgba(37, 244, 238, 0.15); color: var(--tiktok-cyan); border: 1px solid var(--tiktok-cyan); padding: 6px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; margin-bottom: 15px; }
-        .error { color: var(--tiktok-pink); background: rgba(254, 44, 85, 0.1); border: 1px solid var(--tiktok-pink); padding: 12px; border-radius: 8px; margin-top: 15px; text-align: center; }
+        .platform-tabs { display: flex; gap: 10px; margin-bottom: 1.2rem; }
+        .platform-btn {
+            flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border-color); background: #18181b; color: #fff;
+            cursor: pointer; text-align: center; font-weight: bold; display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .platform-btn.active[data-platform="tiktok"] { background: #fe2c55; border-color: #fe2c55; }
+        .platform-btn.active[data-platform="twitch"] { background: #9146ff; border-color: #9146ff; }
+        .platform-btn.active[data-platform="kick"] { background: #53fc18; color: #000; border-color: #53fc18; }
+
+        .status-badge { display: inline-block; background: rgba(37, 244, 238, 0.15); color: #25f4ee; border: 1px solid #25f4ee; padding: 6px 12px; border-radius: 20px; font-size: 0.85rem; font-weight: bold; margin-bottom: 15px; }
+        .error { color: #fe2c55; background: rgba(254, 44, 85, 0.1); border: 1px solid #fe2c55; padding: 12px; border-radius: 8px; margin-top: 15px; text-align: center; }
         .success { color: #4ade80; background: rgba(74, 222, 128, 0.1); border: 1px solid #4ade80; padding: 12px; border-radius: 8px; margin-top: 15px; text-align: center; }
 
         @media (max-width: 768px) {
@@ -263,7 +272,7 @@ HTML_LAYOUT = """
 
     <aside class="sidebar">
         <div>
-            <div class="brand"><i class="fa-brands fa-tiktok"></i><span>لوحة التحكم</span></div>
+            <div class="brand"><i class="fa-solid fa-tower-broadcast"></i><span>لوحة التحكم</span></div>
             
             <ul class="nav-menu" style="margin-top: 1rem;">
                 <li class="nav-item active"><a href="/"><i class="fa-solid fa-house"></i> الرئيسية</a></li>
@@ -290,10 +299,10 @@ HTML_LAYOUT = """
     <main class="main-content">
         <div class="card">
             <h2>إدارة التنبيهات التلقائية</h2>
-            <p class="desc">قم بإعداد حساب التيك توك وروم الديسكورد للتنبيه المباشر</p>
+            <p class="desc">قم بضبط منصة البث المباشر وروم الديسكورد للتنبيهات</p>
 
             <div id="content">
-                <a href="/login" class="btn-tiktok"><i class="fa-brands fa-discord"></i> تسجيل الدخول عبر ديسكورد</a>
+                <a href="/login" class="btn-submit"><i class="fa-brands fa-discord"></i> تسجيل الدخول عبر ديسكورد</a>
             </div>
         </div>
     </main>
@@ -301,6 +310,7 @@ HTML_LAYOUT = """
     <script>
         const urlParams = new URLSearchParams(window.location.search);
         const token = urlParams.get('token');
+        let selectedPlatform = 'tiktok';
 
         function reloadSidebar() {
             fetch('/api/saved-configs')
@@ -313,7 +323,7 @@ HTML_LAYOUT = """
                             menu.innerHTML += `
                                 <li class="saved-server-item">
                                     <span><i class="fa-solid fa-hashtag"></i> ${item.guild_id}</span>
-                                    <strong style="color:var(--tiktok-cyan)">@${item.tiktok_user}</strong>
+                                    <strong style="color:#25f4ee">@${item.tiktok_user}</strong>
                                 </li>`;
                         });
                     } else {
@@ -339,11 +349,20 @@ HTML_LAYOUT = """
                                 <select id="guildSelect">`;
                         data.guilds.forEach(g => { html += `<option value="${g.id}">${g.name}</option>`; });
                         html += `</select></div>
-                            <div style="text-align: center; margin: 10px 0;"><span class="status-badge"><i class="fa-solid fa-bolt"></i> المراقبة المباشرة تعمل الآن 🔥</span></div>
-                            <div class="form-group"><label>يوزر التيك توك (TikTok Username):</label><input type="text" id="tiktokUser" placeholder="مثال: os_in7"></div>
+
+                            <div class="form-group">
+                                <label>اختر المنصة:</label>
+                                <div class="platform-tabs">
+                                    <div class="platform-btn active" data-platform="tiktok" onclick="setPlatform('tiktok')"><i class="fa-brands fa-tiktok"></i> TikTok</div>
+                                    <div class="platform-btn" data-platform="twitch" onclick="setPlatform('twitch')"><i class="fa-brands fa-twitch"></i> Twitch</div>
+                                    <div class="platform-btn" data-platform="kick" onclick="setPlatform('kick')"><i class="fa-solid fa-bolt"></i> Kick</div>
+                                </div>
+                            </div>
+
+                            <div class="form-group"><label id="userLabel">يوزر حساب TikTok:</label><input type="text" id="streamerUser" placeholder="مثال: os_in7"></div>
                             <div class="form-group"><label>رقم/آيدي روم التنبيهات (Channel ID):</label><input type="text" id="channelId" placeholder="مثال: 1538986763622813766"></div>
                             
-                            <button onclick="saveSettings()" class="btn-tiktok"><i class="fa-solid fa-floppy-disk"></i> حفظ وتفعيل التنبيه الآلي</button>
+                            <button onclick="saveSettings()" class="btn-submit"><i class="fa-solid fa-floppy-disk"></i> حفظ وتفعيل التنبيه الآلي</button>
 
                             <div id="responseMsg"></div>`;
                         document.getElementById('content').innerHTML = html;
@@ -353,14 +372,29 @@ HTML_LAYOUT = """
                 });
         }
 
+        function setPlatform(platform) {
+            selectedPlatform = platform;
+            document.querySelectorAll('.platform-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`.platform-btn[data-platform="${platform}"]`).classList.add('active');
+            
+            const label = document.getElementById('userLabel');
+            if (platform === 'twitch') {
+                label.innerText = 'يوزر حساب Twitch:';
+            } else if (platform === 'kick') {
+                label.innerText = 'يوزر حساب Kick:';
+            } else {
+                label.innerText = 'يوزر حساب TikTok:';
+            }
+        }
+
         function saveSettings() {
             const guildId = document.getElementById('guildSelect').value;
-            const tiktokUser = document.getElementById('tiktokUser').value.trim();
+            const streamerUser = document.getElementById('streamerUser').value.trim();
             const channelId = document.getElementById('channelId').value.trim();
             const msgDiv = document.getElementById('responseMsg');
 
-            if (!tiktokUser || !channelId) {
-                msgDiv.innerHTML = '<div class="error">يرجى ملء يوزر التيك توك ورقم الروم أولاً.</div>';
+            if (!streamerUser || !channelId) {
+                msgDiv.innerHTML = '<div class="error">يرجى ملء كافة البيانات أولاً.</div>';
                 return;
             }
 
@@ -369,7 +403,7 @@ HTML_LAYOUT = """
             fetch('/api/save', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ guild_id: guildId, tiktok_user: tiktokUser, channel_id: channelId })
+                body: JSON.stringify({ guild_id: guildId, streamer_user: streamerUser, channel_id: channelId, platform: selectedPlatform })
             })
             .then(res => res.json())
             .then(data => {
@@ -395,8 +429,6 @@ def get_redirect_uri():
     if base_url.startswith("http://"):
         base_url = base_url.replace("http://", "https://", 1)
     return f"{base_url}/callback"
-
-# --- Routes ---
 
 @app.route('/')
 def index():
@@ -461,7 +493,7 @@ def get_saved_configs():
     for g_id, data in configs.items():
         result.append({
             "guild_id": g_id,
-            "tiktok_user": data.get("tiktok_user", ""),
+            "tiktok_user": data.get("streamer_user") or data.get("tiktok_user", ""),
             "channel_id": data.get("channel_id", "")
         })
     return jsonify({"configs": result})
@@ -470,30 +502,13 @@ def get_saved_configs():
 def save_settings():
     data = request.json
     guild_id = str(data.get('guild_id')).strip()
-    tiktok_user = data.get('tiktok_user', '').replace('@', '').strip()
+    streamer_user = data.get('streamer_user', '').replace('@', '').strip()
     channel_id = str(data.get('channel_id', '')).strip()
+    platform = data.get('platform', 'tiktok').strip()
 
-    save_configs_db(guild_id, tiktok_user, channel_id)
+    save_configs_db(guild_id, streamer_user, channel_id, platform)
 
-    # إرسال رسالة الربط التأكيدية
-    sent, details = send_discord_alert(channel_id, tiktok_user, is_test=True)
-
-    # الفحص الفوري للحساب: إن كان فاتحاً للبث حالياً، يتم إرسال إشعار البث ومعه رابط البث فوراً
-    def check_initial_live():
-        try:
-            client = TikTokLiveClient(unique_id=tiktok_user)
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-            async def run_check():
-                if await client.is_live():
-                    send_discord_alert(channel_id, tiktok_user, is_test=False)
-                    
-            loop.run_until_complete(run_check())
-        except Exception as e:
-            print(f"⚠️ Check initial live error: {e}")
-
-    threading.Thread(target=check_initial_live, daemon=True).start()
+    sent, details = send_discord_alert(channel_id, streamer_user, platform=platform, is_test=True)
 
     return jsonify({"success": sent, "details": details})
 
