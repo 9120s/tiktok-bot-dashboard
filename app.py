@@ -1,5 +1,6 @@
 import os
 import time
+import json
 import asyncio
 import threading
 import requests
@@ -14,7 +15,26 @@ DISCORD_CLIENT_SECRET = os.getenv("CLIENT_SECRET", os.getenv("DISCORD_CLIENT_SEC
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 SERVER_INVITE_URL = os.getenv("SERVER_INVITE_URL", "https://discord.gg/TQUFzyxM7").strip()
 
-SAVED_CONFIGS = {}
+CONFIG_FILE = "configs.json"
+
+# --- دمج وإدارة الحفظ التلقائي في ملف JSON ---
+def load_configs():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"⚠️ Error loading config file: {e}")
+    return {}
+
+def save_configs(configs):
+    try:
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+            json.dump(configs, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"❌ Error saving config file: {e}")
+
+SAVED_CONFIGS = load_configs()
 LAST_LIVE_STATUS = {}
 
 # --- تشغيل بوت ديسكورد ---
@@ -40,7 +60,6 @@ def send_discord_alert(channel_id, tiktok_user, is_test=False):
         print("❌ [ALERT ERROR] BOT_TOKEN غير مضاف!")
         return False, "BOT_TOKEN_MISSING"
     
-    # تنظيف آيدي الروم من أي مسافات مخفية
     clean_channel_id = str(channel_id).strip()
     url = f"https://discord.com/api/v10/channels/{clean_channel_id}/messages"
     headers = {
@@ -93,11 +112,12 @@ def check_tiktok_live_status(tiktok_user):
         pass
     return False
 
-# --- محرك المراقبة ---
+# --- محرك المراقبة الشامل لجميع السيرفرات ---
 def background_checker():
     while True:
         try:
-            for guild_id, data in list(SAVED_CONFIGS.items()):
+            current_configs = load_configs()
+            for guild_id, data in current_configs.items():
                 tiktok_user = data.get("tiktok_user")
                 channel_id = data.get("channel_id")
                 
@@ -106,7 +126,7 @@ def background_checker():
                     was_live = LAST_LIVE_STATUS.get(guild_id, False)
 
                     if is_live and not was_live:
-                        print(f"🔴 [LIVE DETECTED] @{tiktok_user} فتح بث! جاري إرسال التنبيه للروم {channel_id}...")
+                        print(f"🔴 [LIVE DETECTED] @{tiktok_user} فتح بث! جاري الإرسال للسيرفر {guild_id} الروم {channel_id}...")
                         send_discord_alert(channel_id, tiktok_user, is_test=False)
                         LAST_LIVE_STATUS[guild_id] = True
                     elif not is_live and was_live:
@@ -424,8 +444,9 @@ def get_guilds():
 
 @app.route('/api/saved-configs')
 def get_saved_configs():
+    configs = load_configs()
     result = []
-    for g_id, data in SAVED_CONFIGS.items():
+    for g_id, data in configs.items():
         result.append({
             "guild_id": g_id,
             "tiktok_user": data.get("tiktok_user", ""),
@@ -436,13 +457,16 @@ def get_saved_configs():
 @app.route('/api/save', methods=['POST'])
 def save_settings():
     data = request.json
-    guild_id = data.get('guild_id')
+    guild_id = str(data.get('guild_id')).strip()
     tiktok_user = data.get('tiktok_user', '').replace('@', '').strip()
-    channel_id = data.get('channel_id', '').strip()
+    channel_id = str(data.get('channel_id', '')).strip()
 
-    SAVED_CONFIGS[guild_id] = {"tiktok_user": tiktok_user, "channel_id": channel_id}
+    # حفظ وإضافة السيرفر مع السيرفرات السابقة دون مسحها
+    configs = load_configs()
+    configs[guild_id] = {"tiktok_user": tiktok_user, "channel_id": channel_id}
+    save_configs(configs)
 
-    # اختبار إرسال الرسالة وإرجاع النتيجة التفصيلية
+    # إرسال الرسالة التجريبية لتأكيد الربط
     sent, details = send_discord_alert(channel_id, tiktok_user, is_test=True)
 
     return jsonify({"success": sent, "sent": sent, "details": details})
