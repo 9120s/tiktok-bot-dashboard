@@ -9,7 +9,17 @@ from supabase import create_client, Client
 import discord
 from discord.ext import commands
 from TikTokLive import TikTokLiveClient
-from TikTokLive.errors import UserNotFound, LiveNotFound
+
+# استدعاء التنبيهات والأخطاء بشكل متوافق مع كافة الإصدارات
+try:
+    from TikTokLive.errors import UserNotFound, LiveNotFound
+except ImportError:
+    try:
+        from TikTokLive.proto.utilities import LiveNotFound
+        UserNotFound = Exception
+    except ImportError:
+        UserNotFound = Exception
+        LiveNotFound = Exception
 
 # 1. إعداد متغيرات البيئة
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
