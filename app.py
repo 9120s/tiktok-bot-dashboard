@@ -63,7 +63,7 @@ async def send_discord_message_async(channel_id, content=None, embed=None):
     except Exception as e:
         print(f"Failed to send message to channel {channel_id}: {e}")
 
-# 3. دالة فحص وإرسال إشعار البث المباشر
+# 3. دالة فحص وإرسال إشعار البث المباشر الفعلي
 def check_user_live(guild_id, username, channel_id, platform):
     try:
         stream_url = f"https://www.tiktok.com/@{username}/live" if platform == "tiktok" else (
@@ -355,18 +355,18 @@ def save():
             "created_at": datetime.utcnow().isoformat()
         }
 
-        # الإضافة والتعديل في Supabase
+        # حفظ البيانات في Supabase
         response = supabase.table("bot_configs").upsert(payload).execute()
         print(f"DEBUG Supabase Response: {response}")
 
-        # إرسال رسالة التأكيد والربط في الديسكورد
+        # إرسال التنبيه التجريبي المعدل إلى الديسكورد
         try:
             embed = discord.Embed(
-                title=f"⚙️ تم الربط بنجاح! - {username}",
-                description=f"حساب **@{username}** متصل الآن وسيرسل إشعار فور بدء البث المباشر.",
-                color=0x2ecc71
+                title=f"🧪 رسالة تجريبية - اختبار نظام التنبيهات",
+                description=f"تم ربط حساب **@{username}** بنجاح في هذا الروم.\nسيعمل التنبيه الآلي فور بدء البث المباشر على منصة **{platform.capitalize()}**.",
+                color=0x00f2fe
             )
-            embed.set_footer(text="TikTok Live Notification")
+            embed.set_footer(text="2s2 STREAM • Test Notification")
 
             if bot.loop and bot.loop.is_running():
                 asyncio.run_coroutine_threadsafe(
