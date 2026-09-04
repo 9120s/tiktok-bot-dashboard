@@ -8,6 +8,8 @@ from flask import Flask, render_template_string, request, redirect, url_for, ses
 from supabase import create_client, Client
 import discord
 from discord.ext import commands
+from TikTokLive import TikTokLiveClient
+from TikTokLive.proto.utilities import LiveNotFound
 
 # 1. إعداد متغيرات البيئة
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -33,22 +35,38 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 live_cache = {}
 
-# دالة التحقق من حالة البث على منصة تيك توك
+# دالة التحقق من بث TikTok
 def check_tiktok_live_status(username):
     try:
-        url = f"https://www.tiktok.com/@{username}/live"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Accept-Language": "en-US,en;q=0.9"
-        }
-        response = requests.get(url, headers=headers, timeout=8)
-        
-        if response.status_code == 200:
-            content = response.text
-            if '"status":2' in content or 'live-room' in content or 'room_id' in content:
-                return True
+        client = TikTokLiveClient(unique_id=username)
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        room_info = loop.run_until_complete(client.get_room_info())
+        loop.close()
+
+        if room_info and getattr(room_info, "status", 0) == 2:
+            return True
+    except LiveNotFound:
+        return False
     except Exception as e:
         print(f"Error checking TikTok status for {username}: {e}")
+    return False
+
+# دالة التحقق من بث Kick
+def check_kick_live_status(username):
+    try:
+        url = f"https://kick.com/api/v1/channels/{username}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        res = requests.get(url, headers=headers, timeout=8)
+        if res.status_code == 200:
+            data = res.json()
+            livestream = data.get("livestream")
+            if livestream and livestream.get("is_live") is True:
+                return True
+    except Exception as e:
+        print(f"Error checking Kick status for {username}: {e}")
     return False
 
 # دالة إرسال التنبيهات في الديسكورد بأمان
@@ -66,24 +84,29 @@ async def send_discord_message_async(channel_id, content=None, embed=None):
 # 3. دالة فحص وإرسال إشعار البث المباشر الفعلي
 def check_user_live(guild_id, username, channel_id, platform):
     try:
-        stream_url = f"https://www.tiktok.com/@{username}/live" if platform == "tiktok" else (
-            f"https://www.twitch.tv/{username}" if platform == "twitch" else f"https://kick.com/{username}"
-        )
+        if platform == "tiktok":
+            stream_url = f"https://www.tiktok.com/@{username}/live"
+            is_live = check_tiktok_live_status(username)
+        elif platform == "kick":
+            stream_url = f"https://kick.com/{username}"
+            is_live = check_kick_live_status(username)
+        else:
+            return
+
         cache_key = f"{guild_id}_{username}_{platform}"
-        
-        is_live = check_tiktok_live_status(username) if platform == "tiktok" else False
 
         if is_live and not live_cache.get(cache_key):
+            color = 0xfe2c55 if platform == "tiktok" else 0x53fc18 # لون تيكتوك الوردي أو لون كيك الأخضر
             embed = discord.Embed(
                 title=f"🔴 {username} الآن في بث مباشر على {platform.capitalize()}!",
                 description=f"**رابط البث**\n[اضغط هنا للإنضمام للبث]({stream_url})",
-                color=0xfe2c55
+                color=color
             )
-            embed.set_footer(text="TikTok Live Notification")
+            embed.set_footer(text=f"{platform.capitalize()} Live Notification")
             
             if bot.loop and bot.loop.is_running():
                 asyncio.run_coroutine_threadsafe(
-                    send_discord_message_async(channel_id, content=f"@everyone {username} بدأ بث حياكم", embed=embed),
+                    send_discord_message_async(channel_id, content=f"@everyone {username} بدأ بث على {platform.capitalize()} حياكم!", embed=embed),
                     bot.loop
                 )
             live_cache[cache_key] = True
@@ -196,7 +219,7 @@ HTML_TEMPLATE = """
         <div class="section-title">السيرفرات المحفوظة</div>
         {% for item in saved_configs %}
             <div class="server-card">
-                <div class="user-name">👤 @{{ item.get('tiktok_user') }}</div>
+                <div class="user-name">👤 @{{ item.get('tiktok_user') }} ({{ item.get('platform', 'tiktok').upper() }})</div>
                 <div class="server-id">🆔 سيرفر: {{ item.get('guild_id') }}</div>
                 <div class="server-id">📢 روم: {{ item.get('channel_id') }}</div>
             </div>
@@ -244,14 +267,13 @@ HTML_TEMPLATE = """
                     <label>اختر المنصة:</label>
                     <select name="platform">
                         <option value="tiktok">TikTok</option>
-                        <option value="twitch">Twitch</option>
                         <option value="kick">Kick</option>
                     </select>
                 </div>
 
                 <div class="form-group">
                     <label>يوزر الحساب (Username):</label>
-                    <input type="text" name="username" value="xzadd2" required>
+                    <input type="text" name="username" value="2vce4" required>
                 </div>
 
                 <div class="form-group">
@@ -357,9 +379,8 @@ def save():
 
         # حفظ البيانات في Supabase
         response = supabase.table("bot_configs").upsert(payload).execute()
-        print(f"DEBUG Supabase Response: {response}")
 
-        # إرسال التنبيه التجريبي المعدل إلى الديسكورد
+        # إرسال التنبيه التجريبي للمنصة المختارة
         try:
             embed = discord.Embed(
                 title=f"🧪 رسالة تجريبية - اختبار نظام التنبيهات",
