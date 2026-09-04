@@ -1,11 +1,14 @@
 import os
 import time
 import threading
+import asyncio
 import requests
 from flask import Flask, render_template_string, request, redirect, url_for, session
 from supabase import create_client, Client
 import discord
 from discord.ext import commands
+from TikTokLive import TikTokLiveClient
+from TikTokLive.events import ConnectEvent
 
 # 1. إعدادات البيئة
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -26,25 +29,31 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 live_cache = {}
 
-def is_tiktok_live(username):
-    try:
-        url = f"https://www.tiktok.com/@{username}/live"
-        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
-        res = requests.get(url, headers=headers, timeout=5)
-        if "room_id" in res.text or '"status":2' in res.text or 'live-room' in res.text:
-            return True
-    except Exception as e:
-        print(f"Error checking TikTok status for {username}: {e}")
-    return False
+# دالة فحص البث المباشر المعتمدة عبر TikTokLive
+def is_tiktok_live_sync(username):
+    async def _check():
+        try:
+            client = TikTokLiveClient(unique_id=username)
+            return await client.is_live()
+        except Exception as e:
+            print(f"Error checking TikTok live for {username}: {e}")
+            return False
 
-# 3. دالة فحص حالة البث
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    result = loop.run_until_complete(_check())
+    loop.close()
+    return result
+
+# 3. دالة إرسال الإشعار وفحص البث
 def check_user_live(guild_id, username, channel_id, platform):
     try:
         stream_url = f"https://www.tiktok.com/@{username}/live" if platform == "tiktok" else (
             f"https://www.twitch.tv/{username}" if platform == "twitch" else f"https://kick.com/{username}"
         )
         cache_key = f"{guild_id}_{username}_{platform}"
-        is_live = is_tiktok_live(username) if platform == "tiktok" else False
+        
+        is_live = is_tiktok_live_sync(username) if platform == "tiktok" else False
 
         if is_live and not live_cache.get(cache_key):
             channel = bot.get_channel(int(channel_id))
@@ -55,6 +64,8 @@ def check_user_live(guild_id, username, channel_id, platform):
                     color=0xfe2c55
                 )
                 embed.set_footer(text="TikTok Live Notification")
+                
+                # إرسال التنبيه في ديسكورد
                 bot.loop.create_task(channel.send(content=f"@everyone {username} بدأ بث حياكم", embed=embed))
                 live_cache[cache_key] = True
         elif not is_live:
@@ -63,7 +74,7 @@ def check_user_live(guild_id, username, channel_id, platform):
     except Exception as e:
         print(f"Error checking {username} on {platform}: {e}")
 
-# 4. المراقبة المستمرة
+# 4. دالة المراقبة المستمرة
 def check_streams():
     while True:
         try:
@@ -82,7 +93,7 @@ def check_streams():
             print(f"Error in stream monitor: {e}")
         time.sleep(30)
 
-# 5. واجهة لوحة التحكم بتصميم تيك توك والقائمة الجانبية
+# 5. تصميم القوائم الجانبية والواجهة
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -94,27 +105,29 @@ HTML_TEMPLATE = """
         * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
         body { background-color: #121212; color: #ffffff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
         
-        .card { background: #1e1e1e; border-radius: 20px; padding: 24px; width: 100%; max-width: 400px; border: 1px solid #2f2f2f; box-shadow: 0px 8px 25px rgba(0,0,0,0.5); text-align: center; position: relative; overflow: hidden; }
+        .card { background: #1e1e1e; border-radius: 20px; padding: 24px; width: 100%; max-width: 400px; border: 1px solid #2f2f2f; box-shadow: 0px 8px 25px rgba(0,0,0,0.5); text-align: center; position: relative; }
         
-        /* الشريط العلوي */
         .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid #2f2f2f; }
         .logo { font-weight: 900; font-size: 18px; color: #ffffff; text-shadow: -1px -1px 0 #00f2fe, 1px 1px 0 #fe2c55; }
         .menu-btn { background: none; border: none; color: #fff; font-size: 24px; cursor: pointer; padding: 0; width: auto; }
 
-        /* القائمة الجانبية Overlay & Sidebar */
-        .sidebar { position: fixed; top: 0; right: -280px; width: 280px; height: 100%; background: #181818; border-left: 1px solid #2f2f2f; z-index: 1000; transition: 0.3s ease; padding: 20px; text-align: right; box-shadow: -5px 0 15px rgba(0,0,0,0.5); }
+        /* القائمة الجانبية */
+        .sidebar { position: fixed; top: 0; right: -300px; width: 300px; height: 100%; background: #181818; border-left: 1px solid #2f2f2f; z-index: 1000; transition: 0.3s ease; padding: 20px; text-align: right; overflow-y: auto; box-shadow: -5px 0 15px rgba(0,0,0,0.5); }
         .sidebar.active { right: 0; }
         .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 999; display: none; }
         .overlay.active { display: block; }
         
-        .sidebar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; border-bottom: 1px solid #2f2f2f; padding-bottom: 10px; }
+        .sidebar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #2f2f2f; padding-bottom: 10px; }
         .close-btn { background: none; border: none; color: #fe2c55; font-size: 20px; cursor: pointer; font-weight: bold; width: auto; }
 
-        .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 12px; color: #fff; text-decoration: none; border-radius: 10px; margin-bottom: 8px; background: #222; font-size: 13px; font-weight: bold; }
+        .section-title { font-size: 13px; font-weight: 800; color: #00f2fe; margin: 15px 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 12px; color: #fff; text-decoration: none; border-radius: 10px; margin-bottom: 8px; background: #222; font-size: 13px; font-weight: bold; transition: 0.2s; border: 1px solid #2f2f2f; }
         .sidebar-item:hover { background: #2f2f2f; border-color: #00f2fe; }
 
-        .saved-servers { margin-top: 15px; border-top: 1px solid #2f2f2f; padding-top: 15px; }
-        .server-tag { background: #121212; border: 1px solid #333; padding: 8px 12px; border-radius: 8px; font-size: 12px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+        .server-card { background: #121212; border: 1px solid #333; padding: 10px 12px; border-radius: 10px; font-size: 13px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 4px; }
+        .server-card .user-name { font-weight: bold; color: #fe2c55; font-size: 14px; }
+        .server-card .server-id { color: #aaa; font-size: 11px; }
 
         h2 { font-size: 20px; font-weight: 800; margin: 10px 0 6px 0; }
         .subtitle { font-size: 12px; color: #a0a0a0; margin-bottom: 20px; }
@@ -132,8 +145,8 @@ HTML_TEMPLATE = """
         .btn-submit { width: 100%; padding: 14px; border: none; border-radius: 12px; background: linear-gradient(45deg, #fe2c55, #ff0050); color: #ffffff; font-weight: bold; cursor: pointer; font-size: 14px; margin-top: 10px; transition: 0.2s; }
         .btn-submit:active { transform: scale(0.98); }
         
-        .user-chip { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #fff; background: #121212; padding: 4px 10px; border-radius: 20px; border: 1px solid #333; }
-        .user-chip img { width: 22px; height: 22px; border-radius: 50%; }
+        .user-chip { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #fff; background: #121212; padding: 8px 12px; border-radius: 12px; border: 1px solid #333; margin-bottom: 10px; }
+        .user-chip img { width: 26px; height: 26px; border-radius: 50%; }
         .alert { background: rgba(0, 242, 254, 0.15); border: 1px solid #00f2fe; color: #00f2fe; padding: 10px; border-radius: 10px; font-size: 12px; margin-bottom: 15px; }
     </style>
 </head>
@@ -143,12 +156,14 @@ HTML_TEMPLATE = """
     <div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
-            <span style="font-weight: bold;">القائمة الرئيسية</span>
+            <span style="font-weight: bold; font-size: 16px;">القائمة الجانبية</span>
             <button class="close-btn" onclick="toggleSidebar()">✕</button>
         </div>
 
+        <!-- الحساب الجاري -->
+        <div class="section-title">الحساب</div>
         {% if user %}
-            <div class="user-chip" style="margin-bottom: 15px; justify-content: center; padding: 8px;">
+            <div class="user-chip">
                 {% if user.avatar %}
                     <img src="https://cdn.discordapp.com/avatars/{{ user.id }}/{{ user.avatar }}.png" alt="Avatar">
                 {% endif %}
@@ -159,19 +174,21 @@ HTML_TEMPLATE = """
             <a href="/login" class="sidebar-item" style="color: #00f2fe;">🔑 تسجيل الدخول عبر Discord</a>
         {% endif %}
 
+        <!-- الروابط العامة -->
+        <div class="section-title">الروابط</div>
         <a href="https://discord.gg/hnbSsFDnF" target="_blank" class="sidebar-item">👾 انضم لسيرفرنا</a>
 
-        <div class="saved-servers">
-            <span style="font-size: 12px; color: #aaa; font-weight: bold; display: block; margin-bottom: 10px;">السيرفرات المحفوظة:</span>
-            {% for item in saved_configs %}
-                <div class="server-tag">
-                    <span>🆔 {{ item.guild_id }}</span>
-                    <span style="color: #00f2fe;">@{{ item.tiktok_user }}</span>
-                </div>
-            {% else %}
-                <div style="font-size: 11px; color: #666;">لا توجد سيرفرات محفوظة حالياً</div>
-            {% endfor %}
-        </div>
+        <!-- السيرفرات المحفوظة -->
+        <div class="section-title">السيرفرات المحفوظة</div>
+        {% for item in saved_configs %}
+            <div class="server-card">
+                <div class="user-name">👤 @{{ item.tiktok_user }}</div>
+                <div class="server-id">🆔 سيرفر: {{ item.guild_id }}</div>
+                <div class="server-id">📢 روم: {{ item.channel_id }}</div>
+            </div>
+        {% else %}
+            <div style="font-size: 12px; color: #666; padding: 10px 0;">لا توجد سيرفرات محفوظة حالياً</div>
+        {% endfor %}
     </div>
 
     <!-- البطاقة الرئيسية -->
@@ -185,12 +202,12 @@ HTML_TEMPLATE = """
         <div class="subtitle">قم بإعداد حساب المنصة وروم الديسكورد للتنبيه المباشر</div>
 
         {% if success %}
-            <div class="alert">✅ تم حفظ الربط وإرسال التأكيد للروم!</div>
+            <div class="alert">✅ تم حفظ البيانات وإرسال التنبيه في الديسكورد!</div>
         {% endif %}
 
         {% if not user %}
             <div style="padding: 20px 0;">
-                <p style="font-size: 13px; color: #aaa; margin-bottom: 15px;">افتح القائمة الجانبية أو اضغط بالأسفل لتسجيل الدخول</p>
+                <p style="font-size: 13px; color: #aaa; margin-bottom: 15px;">يرجى تسجيل الدخول لعرض سيرفراتك والتحكم بالتنبيهات</p>
                 <a href="/login" class="btn-submit" style="display: block; text-decoration: none;">🔑 تسجيل الدخول عبر Discord</a>
             </div>
         {% else %}
@@ -251,7 +268,6 @@ def index():
     guilds = session.get("guilds", [])
     success = request.args.get("success")
     
-    # جلب السيرفرات المحفوظة من قاعدة البيانات لعرضها في القائمة الجانبية
     saved_configs = []
     try:
         res = supabase.table("bot_configs").select("*").execute()
@@ -322,18 +338,17 @@ def save():
             "platform": str(platform)
         }
         
-        try:
-            supabase.table("bot_configs").insert(data).execute()
-        except Exception:
-            supabase.table("bot_configs").update(data).eq("guild_id", str(guild_id)).execute()
+        # استخدام upsert لضمان تحديث السجل أو إنشائه بدون مشاكل
+        supabase.table("bot_configs").upsert(data, on_conflict="guild_id").execute()
 
+        # إرسال إشعار تجريبي وتأكيد في الروم المحددة
         async def send_confirmation():
             await bot.wait_until_ready()
             channel = bot.get_channel(int(channel_id))
             if channel:
                 embed = discord.Embed(
-                    title=f"⚙️ تم الربط بنجاح! - {username}",
-                    description=f"حساب **@{username}** متصل الآن وسيرسل إشعار فور بدء البث.",
+                    title=f"⚙️ تم الحفظ والربط بنجاح!",
+                    description=f"تم ربط حساب **@{username}** بالروم بنجاح، وسأقوم بإرسال إشعار فور بدء البث المباشر.",
                     color=0x2ecc71
                 )
                 embed.set_footer(text="TikTok Live Notification")
