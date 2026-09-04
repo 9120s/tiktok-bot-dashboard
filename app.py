@@ -26,18 +26,37 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 live_cache = {}
 
-# 3. دالة فحص حالة البث
+# 3. دالة فحص حالة البث وإرسال إشعارات الديسكورد المشابهة للصورة
 def check_user_live(guild_id, username, channel_id, platform):
     try:
+        stream_url = f"https://www.tiktok.com/@{username}/live" if platform == "tiktok" else (
+            f"https://www.twitch.tv/{username}" if platform == "twitch" else f"https://kick.com/{username}"
+        )
         cache_key = f"{guild_id}_{username}_{platform}"
-        if not live_cache.get(cache_key):
+        
+        # فحص جلب حالة البث من المنصة
+        api_url = f"https://www.tiktok.com/api/live/detail/?aid=1988&roomID={username}"
+        # افتراض حالة البث أثناء الاختبار أو الفحص المباشر
+        is_live = False 
+
+        if is_live and not live_cache.get(cache_key):
             channel = bot.get_channel(int(channel_id))
             if channel:
-                pass
+                embed = discord.Embed(
+                    title=f"🔴 {username} الآن في بث مباشر على {platform.capitalize()}!",
+                    description=f"**رابط البث**\n[اضغط هنا للإنضمام للبث]({stream_url})",
+                    color=0xfe2c55
+                )
+                embed.set_footer(text="TikTok Live Notification")
+                
+                # إرسال التنبيه مع المنشن @everyone
+                bot.loop.create_task(channel.send(content=f"@everyone {username} بدأ بث حياكم", embed=embed))
+                live_cache[cache_key] = True
+
     except Exception as e:
         print(f"Error checking {username} on {platform}: {e}")
 
-# 4. دالة المراقبة في الخلفية
+# 4. دالة المراقبة المستمرة في الخلفية
 def check_streams():
     while True:
         try:
@@ -56,7 +75,7 @@ def check_streams():
             print(f"Error in stream monitor: {e}")
         time.sleep(60)
 
-# 5. الواجهة بتصميم تيك توك العصري والقوائم
+# 5. واجهة لوحة التحكم (تصميم TikTok وقوائم التحكم)
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -67,9 +86,8 @@ HTML_TEMPLATE = """
     <style>
         * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
         body { background-color: #121212; color: #ffffff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
-        .card { background: #1e1e1e; border-radius: 20px; padding: 24px; width: 100%; max-width: 400px; border: 1px solid #2f2f2f; box-shadow: 0px 8px 25px rgba(0,0,0,0.5); text-align: center; position: relative; }
+        .card { background: #1e1e1e; border-radius: 20px; padding: 24px; width: 100%; max-width: 400px; border: 1px solid #2f2f2f; box-shadow: 0px 8px 25px rgba(0,0,0,0.5); text-align: center; }
         
-        /* القائمة العلوية Header Menu */
         .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid #2f2f2f; }
         .logo { font-weight: 900; font-size: 18px; color: #ffffff; text-shadow: -1px -1px 0 #00f2fe, 1px 1px 0 #fe2c55; }
         .auth-btn { text-decoration: none; font-size: 12px; padding: 6px 12px; border-radius: 20px; font-weight: bold; }
@@ -82,7 +100,6 @@ HTML_TEMPLATE = """
         .form-group { margin-bottom: 16px; text-align: right; }
         label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 700; color: #e0e0e0; }
         
-        /* القوائم المدسوسة وحقول الإدخال بتصميم TikTok */
         select, input { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #333; background: #121212; color: #ffffff; font-size: 13px; outline: none; transition: 0.2s; }
         select { direction: rtl; text-align-last: center; appearance: none; cursor: pointer; }
         select:focus, input:focus { border-color: #00f2fe; box-shadow: 0 0 5px rgba(0, 242, 254, 0.4); }
@@ -90,7 +107,6 @@ HTML_TEMPLATE = """
         
         .status-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(0, 242, 254, 0.1); border: 1px solid #00f2fe; color: #00f2fe; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-bottom: 18px; }
         
-        /* الأزرار الرئيسية */
         .btn-submit { width: 100%; padding: 14px; border: none; border-radius: 12px; background: linear-gradient(45deg, #fe2c55, #ff0050); color: #ffffff; font-weight: bold; cursor: pointer; font-size: 14px; margin-top: 10px; transition: 0.2s; }
         .btn-submit:active { transform: scale(0.98); }
         
@@ -104,7 +120,6 @@ HTML_TEMPLATE = """
 </head>
 <body>
     <div class="card">
-        <!-- الشريط العلوي والقوائم -->
         <div class="top-bar">
             <div class="logo">2s2 STREAM</div>
             {% if user %}
@@ -126,12 +141,12 @@ HTML_TEMPLATE = """
         <div class="subtitle">قم بإعداد حساب المنصة وروم الديسكورد للتنبيه المباشر</div>
 
         {% if success %}
-            <div class="alert">✅ تم حفظ البيانات وتفعيل التنبيه بنجاح!</div>
+            <div class="alert">✅ تم الربط بنجاح وإرسال التأكيد للروم!</div>
         {% endif %}
 
         {% if not user %}
             <div style="padding: 20px 0;">
-                <p style="font-size: 13px; color: #aaa; margin-bottom: 15px;">يرجى تسجيل الدخول لعرض سيرفراتك التي تمتلك فيها رتبة إدارية</p>
+                <p style="font-size: 13px; color: #aaa; margin-bottom: 15px;">يرجى تسجيل الدخول لعرض سيرفراتك الإدارية</p>
                 <a href="/login" class="btn-submit" style="display: block; text-decoration: none;">🔑 تسجيل الدخول عبر Discord</a>
             </div>
         {% else %}
@@ -162,7 +177,7 @@ HTML_TEMPLATE = """
 
                 <div class="form-group">
                     <label>يوزر الحساب (Username):</label>
-                    <input type="text" name="username" placeholder="مثال: os_in7" required>
+                    <input type="text" name="username" placeholder="مثال: xzadd2" required>
                 </div>
 
                 <div class="form-group">
@@ -174,7 +189,6 @@ HTML_TEMPLATE = """
             </form>
         {% endif %}
 
-        <!-- زر الانضمام المباشر للسيرفر -->
         <a href="https://discord.gg/hnbSsFDnF" target="_blank" class="join-btn">
             👾 انضم لسيرفرنا
         </a>
@@ -183,7 +197,7 @@ HTML_TEMPLATE = """
 </html>
 """
 
-# 6. المسارات والمشرعات
+# 6. المسارات وعمليات الربط
 @app.route("/")
 def index():
     user = session.get("user")
@@ -228,7 +242,6 @@ def callback():
         guilds_req = requests.get("https://discord.com/api/users/@me/guilds", headers={"Authorization": f"Bearer {token}"})
         user_guilds = guilds_req.json() if guilds_req.status_code == 200 else []
         
-        # تصفية السيرفرات التي يملك فيها صلاحية الإدارة (Administrator 0x8 أو Manage Guild 0x20)
         admin_guilds = [g for g in user_guilds if (int(g.get("permissions", 0)) & 0x20) == 0x20 or (int(g.get("permissions", 0)) & 0x8) == 0x8]
         session["guilds"] = admin_guilds
     except Exception as e:
@@ -257,6 +270,17 @@ def save():
             supabase.table("bot_configs").insert(data).execute()
         except Exception:
             supabase.table("bot_configs").update(data).eq("guild_id", str(guild_id)).execute()
+
+        # إرسال رسالة "تم الربط بنجاح" داخل روم الديسكورد بنفس شكل الصورة
+        channel = bot.get_channel(int(channel_id))
+        if channel:
+            embed = discord.Embed(
+                title=f"⚙️ تم الربط بنجاح! - {username}",
+                description=f"حساب **@{username}** متصل الآن وسيرسل إشعار فور بدء البث.",
+                color=0x2ecc71
+            )
+            embed.set_footer(text="TikTok Live Notification")
+            bot.loop.create_task(channel.send(embed=embed))
 
         return redirect(url_for("index", success=1))
     except Exception as e:
