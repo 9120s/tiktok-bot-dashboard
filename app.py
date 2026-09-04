@@ -8,18 +8,6 @@ from flask import Flask, render_template_string, request, redirect, url_for, ses
 from supabase import create_client, Client
 import discord
 from discord.ext import commands
-from TikTokLive import TikTokLiveClient
-
-# استدعاء التنبيهات والأخطاء بشكل متوافق مع كافة الإصدارات
-try:
-    from TikTokLive.errors import UserNotFound, LiveNotFound
-except ImportError:
-    try:
-        from TikTokLive.proto.utilities import LiveNotFound
-        UserNotFound = Exception
-    except ImportError:
-        UserNotFound = Exception
-        LiveNotFound = Exception
 
 # 1. إعداد متغيرات البيئة
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -43,21 +31,34 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 live_cache = {}
 
-# دالة التحقق من بث TikTok
+# دالة الفحص المباشر والسريع لبث TikTok (بدون حظر وبدون أخطاء)
 def check_tiktok_live_status(username):
     try:
-        client = TikTokLiveClient(unique_id=username)
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        room_info = loop.run_until_complete(client.get_room_info())
-        loop.close()
-
-        if room_info and getattr(room_info, "status", 0) == 2:
-            return True
-    except (UserNotFound, LiveNotFound):
-        return False
+        url = f"https://www.tiktok.com/api/live/detail/?aid=1988&roomID=&uniqueId={username}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Referer": f"https://www.tiktok.com/@{username}/live",
+            "Accept-Language": "en-US,en;q=0.9"
+        }
+        res = requests.get(url, headers=headers, timeout=10)
+        if res.status_code == 200:
+            data = res.json()
+            # حالة البث 2 تعني أن الحساب في بث مباشر
+            status = data.get("LiveRoomInfo", {}).get("status", 0)
+            if status == 2:
+                return True
     except Exception as e:
         print(f"Error checking TikTok status for {username}: {e}")
+    
+    # محاولة فحص مساندة
+    try:
+        page_url = f"https://www.tiktok.com/@{username}/live"
+        res_page = requests.get(page_url, headers=headers, timeout=10)
+        if res_page.status_code == 200 and '"status":2' in res_page.text:
+            return True
+    except Exception as e:
+        print(f"Fallback check error for {username}: {e}")
+
     return False
 
 # دالة التحقق من بث Kick
@@ -141,7 +142,7 @@ def check_streams():
                         check_user_live(guild_id, username, channel_id, platform)
         except Exception as e:
             print(f"Error in stream monitor thread: {e}")
-        time.sleep(30)
+        time.sleep(25)
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
