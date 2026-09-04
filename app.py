@@ -3,6 +3,7 @@ import time
 import threading
 import asyncio
 import requests
+from datetime import datetime
 from flask import Flask, render_template_string, request, redirect, url_for, session
 from supabase import create_client, Client
 import discord
@@ -58,6 +59,7 @@ async def send_discord_message_async(channel_id, content=None, embed=None):
             channel = await bot.fetch_channel(int(channel_id))
         if channel:
             await channel.send(content=content, embed=embed)
+            print(f"Message sent successfully to channel {channel_id}")
     except Exception as e:
         print(f"Failed to send message to channel {channel_id}: {e}")
 
@@ -342,24 +344,22 @@ def save():
         channel_id = request.form.get("channel_id")
         platform = request.form.get("platform", "tiktok")
 
-        print(f"DEBUG: Received data -> guild_id: {guild_id}, username: {username}, channel_id: {channel_id}, platform: {platform}")
-
         if not guild_id or not username or not channel_id:
-            print("ERROR: Missing required form fields.")
-            return redirect(url_for("index"))
+            return "<h2 style='color:red; text-align:center;'>خطأ: إحدى الخانات فارغة!</h2><div style='text-align:center;'><a href='/'>رجوع</a></div>"
 
         payload = {
             "guild_id": str(guild_id).strip(),
             "tiktok_user": str(username).strip(),
             "channel_id": str(channel_id).strip(),
-            "platform": str(platform).strip()
+            "platform": str(platform).strip(),
+            "created_at": datetime.utcnow().isoformat()
         }
 
-        # استخدام upsert للتعديل والإضافة المباشرة في Supabase
+        # الإضافة والتعديل في Supabase
         response = supabase.table("bot_configs").upsert(payload).execute()
-        print(f"DEBUG: Supabase Response -> {response}")
+        print(f"DEBUG Supabase Response: {response}")
 
-        # إرسال التنبيه التجريبي في خلفية التطبيق
+        # إرسال رسالة التأكيد والربط في الديسكورد
         try:
             embed = discord.Embed(
                 title=f"⚙️ تم الربط بنجاح! - {username}",
@@ -374,12 +374,18 @@ def save():
                     bot.loop
                 )
         except Exception as bot_err:
-            print(f"Discord notification error: {bot_err}")
+            print(f"Discord notice send error: {bot_err}")
 
         return redirect(url_for("index", success=1))
+
     except Exception as e:
-        print(f"Save process main error: {e}")
-        return redirect(url_for("index"))
+        return f"""
+        <div style="background:#121212; color:#ff4d4d; padding:30px; font-family:sans-serif; direction:rtl; min-height:100vh;">
+            <h2 style="border-bottom:1px solid #333; padding-bottom:10px;">❌ حدث خطأ أثناء الحفظ في قاعدة البيانات:</h2>
+            <p style="background:#1e1e1e; padding:15px; border-radius:8px; color:#fff; direction:ltr; text-align:left;">{str(e)}</p>
+            <a href="/" style="display:inline-block; margin-top:15px; padding:10px 20px; background:#00f2fe; color:#000; text-decoration:none; font-weight:bold; border-radius:8px;">العودة للوحة التحكم</a>
+        </div>
+        """
 
 @bot.event
 async def on_ready():
