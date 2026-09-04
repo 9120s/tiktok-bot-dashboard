@@ -26,7 +26,20 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 live_cache = {}
 
-# 3. دالة فحص حالة البث وإرسال إشعارات الديسكورد المشابهة للصورة
+# دالة للتحقق الفعلية من حالة بث تيك توك
+def is_tiktok_live(username):
+    try:
+        url = f"https://www.tiktok.com/@{username}/live"
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        res = requests.get(url, headers=headers, timeout=5)
+        # التحقق مما إذا كانت الصفحة تحتوي على مؤشرات البث المباشر
+        if "room_id" in res.text or '"status":2' in res.text or 'live-room' in res.text:
+            return True
+    except Exception as e:
+        print(f"Error checking TikTok status for {username}: {e}")
+    return False
+
+# 3. دالة فحص حالة البث وإرسال الإشعارات
 def check_user_live(guild_id, username, channel_id, platform):
     try:
         stream_url = f"https://www.tiktok.com/@{username}/live" if platform == "tiktok" else (
@@ -34,10 +47,8 @@ def check_user_live(guild_id, username, channel_id, platform):
         )
         cache_key = f"{guild_id}_{username}_{platform}"
         
-        # فحص جلب حالة البث من المنصة
-        api_url = f"https://www.tiktok.com/api/live/detail/?aid=1988&roomID={username}"
-        # افتراض حالة البث أثناء الاختبار أو الفحص المباشر
-        is_live = False 
+        # فحص حالة البث الحقيقية
+        is_live = is_tiktok_live(username) if platform == "tiktok" else False
 
         if is_live and not live_cache.get(cache_key):
             channel = bot.get_channel(int(channel_id))
@@ -49,14 +60,16 @@ def check_user_live(guild_id, username, channel_id, platform):
                 )
                 embed.set_footer(text="TikTok Live Notification")
                 
-                # إرسال التنبيه مع المنشن @everyone
-                bot.loop.create_task(channel.send(content=f"@everyone {username} بدأ بث حياكم", embed=embed))
+                # إرسال التنبيه مع المنشن
+                asyncio_run = bot.loop.create_task(channel.send(content=f"@everyone {username} بدأ بث حياكم", embed=embed))
                 live_cache[cache_key] = True
+        elif not is_live:
+            live_cache[cache_key] = False
 
     except Exception as e:
         print(f"Error checking {username} on {platform}: {e}")
 
-# 4. دالة المراقبة المستمرة في الخلفية
+# 4. دالة المراقبة المستمرة
 def check_streams():
     while True:
         try:
@@ -73,9 +86,9 @@ def check_streams():
                         check_user_live(guild_id, username, channel_id, platform)
         except Exception as e:
             print(f"Error in stream monitor: {e}")
-        time.sleep(60)
+        time.sleep(30)
 
-# 5. واجهة لوحة التحكم (تصميم TikTok وقوائم التحكم)
+# 5. واجهة لوحة التحكم
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -141,7 +154,7 @@ HTML_TEMPLATE = """
         <div class="subtitle">قم بإعداد حساب المنصة وروم الديسكورد للتنبيه المباشر</div>
 
         {% if success %}
-            <div class="alert">✅ تم الربط بنجاح وإرسال التأكيد للروم!</div>
+            <div class="alert">✅ تم حفظ الربط وإرسال الرسالة إلى الديسكورد!</div>
         {% endif %}
 
         {% if not user %}
@@ -271,16 +284,20 @@ def save():
         except Exception:
             supabase.table("bot_configs").update(data).eq("guild_id", str(guild_id)).execute()
 
-        # إرسال رسالة "تم الربط بنجاح" داخل روم الديسكورد بنفس شكل الصورة
-        channel = bot.get_channel(int(channel_id))
-        if channel:
-            embed = discord.Embed(
-                title=f"⚙️ تم الربط بنجاح! - {username}",
-                description=f"حساب **@{username}** متصل الآن وسيرسل إشعار فور بدء البث.",
-                color=0x2ecc71
-            )
-            embed.set_footer(text="TikTok Live Notification")
-            bot.loop.create_task(channel.send(embed=embed))
+        # إرسال رسالة الربط بالديسكورد فور الحفظ لضمان عمل البوت في الروم
+        async def send_confirmation():
+            await bot.wait_until_ready()
+            channel = bot.get_channel(int(channel_id))
+            if channel:
+                embed = discord.Embed(
+                    title=f"⚙️ تم الربط بنجاح! - {username}",
+                    description=f"حساب **@{username}** متصل الآن وسيرسل إشعار فور بدء البث.",
+                    color=0x2ecc71
+                )
+                embed.set_footer(text="TikTok Live Notification")
+                await channel.send(embed=embed)
+
+        bot.loop.create_task(send_confirmation())
 
         return redirect(url_for("index", success=1))
     except Exception as e:
