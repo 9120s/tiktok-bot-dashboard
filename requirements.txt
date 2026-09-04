@@ -1,8 +1,6 @@
 Flask
 requests
-discord.py
-waitress
-werkzeug
-PyJWT
-TikTokLive
 supabase
+discord.py
+TikTokLive
+playwright
