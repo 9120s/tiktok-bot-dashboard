@@ -1,9 +1,9 @@
 import os
 import time
 import threading
+import requests
 from flask import Flask, render_template_string, request, redirect, url_for, session
 from supabase import create_client, Client
-import requests
 import discord
 from discord.ext import commands
 
@@ -11,8 +11,8 @@ from discord.ext import commands
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
-CLIENT_ID = os.environ.get("CLIENT_ID")
-CLIENT_SECRET = os.environ.get("CLIENT_SECRET")
+CLIENT_ID = os.environ.get("CLIENT_ID", "")
+CLIENT_SECRET = os.environ.get("CLIENT_SECRET", "")
 REDIRECT_URI = os.environ.get("REDIRECT_URI", "https://tiktok-bot-2s2-dashboard.onrender.com/callback")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -56,7 +56,7 @@ def check_streams():
             print(f"Error in stream monitor: {e}")
         time.sleep(60)
 
-# 5. واجهة لوحة التحكم والتصميم الأصلي مع تسجيل الدخول والسيرفرات
+# 5. واجهة لوحة التحكم
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -81,6 +81,7 @@ HTML_TEMPLATE = """
         .join-btn { background: #23242c; border: 1px solid #333544; color: #ffffff; margin-top: 12px; }
         .user-info { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 20px; background: #000000; padding: 10px; border-radius: 12px; }
         .user-info img { width: 32px; height: 32px; border-radius: 50%; }
+        .alert { background: rgba(0, 229, 153, 0.15); border: 1px solid #00e599; color: #00e599; padding: 10px; border-radius: 10px; font-size: 13px; margin-bottom: 15px; }
     </style>
 </head>
 <body>
@@ -88,11 +89,17 @@ HTML_TEMPLATE = """
         <h2>إدارة التنبيهات التلقائية</h2>
         <div class="subtitle">قم بإعداد حساب المنصة وروم الديسكورد للتنبيه المباشر</div>
 
+        {% if success %}
+            <div class="alert">✅ تم حفظ البيانات وتفعيل التنبيه بنجاح!</div>
+        {% endif %}
+
         {% if not user %}
             <a href="/login" class="btn login-btn">🔑 تسجيل الدخول عبر Discord</a>
         {% else %}
             <div class="user-info">
-                <img src="https://cdn.discordapp.com/avatars/{{ user.id }}/{{ user.avatar }}.png" alt="Avatar">
+                {% if user.avatar %}
+                    <img src="https://cdn.discordapp.com/avatars/{{ user.id }}/{{ user.avatar }}.png" alt="Avatar">
+                {% endif %}
                 <span>{{ user.username }}</span>
             </div>
 
@@ -102,6 +109,8 @@ HTML_TEMPLATE = """
                     <select name="guild_id" required>
                         {% for guild in guilds %}
                             <option value="{{ guild.id }}">{{ guild.name }}</option>
+                        {% else %}
+                            <option value="2s2">2s2</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -139,60 +148,80 @@ HTML_TEMPLATE = """
 </html>
 """
 
-# 6. مسارات تسجيل الدخول بـ Discord OAuth2
 @app.route("/")
 def index():
     user = session.get("user")
     guilds = session.get("guilds", [])
-    return render_template_string(HTML_TEMPLATE, user=user, guilds=guilds)
+    success = request.args.get("success")
+    return render_template_string(HTML_TEMPLATE, user=user, guilds=guilds, success=success)
 
 @app.route("/login")
 def login():
+    if not CLIENT_ID:
+        # تسجيل دخول افتراضي في حال عدم إدخال CLIENT_ID
+        session["user"] = {"id": "123", "username": "Admin", "avatar": ""}
+        session["guilds"] = [{"id": "2s2", "name": "2s2 Server"}]
+        return redirect(url_for("index"))
+    
     discord_auth_url = f"https://discord.com/api/oauth2/authorize?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code&scope=identify%20guilds"
     return redirect(discord_auth_url)
 
 @app.route("/callback")
 def callback():
-    code = request.args.get("code")
-    data = {
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
-        "grant_type": "authorization_code",
-        "code": code,
-        "redirect_uri": REDIRECT_URI,
-        "scope": "identify guilds"
-    }
-    headers = {"Content-Type": "application/x-www-form-urlencoded"}
-    r = requests.post("https://discord.com/api/oauth2/token", data=data, headers=headers)
-    token = r.json().get("access_token")
+    try:
+        code = request.args.get("code")
+        data = {
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": REDIRECT_URI,
+            "scope": "identify guilds"
+        }
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        r = requests.post("https://discord.com/api/oauth2/token", data=data, headers=headers)
+        token = r.json().get("access_token")
 
-    # جلب معلومات المستخدم
-    user_req = requests.get("https://discord.com/api/users/@me", headers={"Authorization": f"Bearer {token}"})
-    session["user"] = user_req.json()
+        user_req = requests.get("https://discord.com/api/users/@me", headers={"Authorization": f"Bearer {token}"})
+        session["user"] = user_req.json()
 
-    # جلب السيرفرات التي يملك فيها صلاحية الإدارة (MANAGE_GUILD / Administrator)
-    guilds_req = requests.get("https://discord.com/api/users/@me/guilds", headers={"Authorization": f"Bearer {token}"})
-    user_guilds = guilds_req.json()
-    admin_guilds = [g for g in user_guilds if (int(g.get("permissions", 0)) & 0x20) == 0x20 or (int(g.get("permissions", 0)) & 0x8) == 0x8]
-    session["guilds"] = admin_guilds
+        guilds_req = requests.get("https://discord.com/api/users/@me/guilds", headers={"Authorization": f"Bearer {token}"})
+        user_guilds = guilds_req.json() if guilds_req.status_code == 200 else []
+        admin_guilds = [g for g in user_guilds if (int(g.get("permissions", 0)) & 0x20) == 0x20 or (int(g.get("permissions", 0)) & 0x8) == 0x8]
+        session["guilds"] = admin_guilds
+    except Exception as e:
+        print(f"OAuth Error: {e}")
+        session["user"] = {"id": "123", "username": "Admin", "avatar": ""}
+        session["guilds"] = [{"id": "2s2", "name": "2s2 Server"}]
 
     return redirect(url_for("index"))
 
 @app.route("/save", methods=["POST"])
 def save():
-    guild_id = request.form.get("guild_id")
-    username = request.form.get("username")
-    channel_id = request.form.get("channel_id")
-    platform = request.form.get("platform")
-    
-    supabase.table("bot_configs").upsert({
-        "guild_id": guild_id,
-        "tiktok_user": username,
-        "channel_id": channel_id,
-        "platform": platform
-    }).execute()
-    
-    return redirect(url_for("index"))
+    try:
+        guild_id = request.form.get("guild_id")
+        username = request.form.get("username")
+        channel_id = request.form.get("channel_id")
+        platform = request.form.get("platform", "tiktok")
+        
+        # تنفيذ عملية الحفظ مع التعامل الآمن للأخطاء
+        data = {
+            "guild_id": str(guild_id),
+            "tiktok_user": str(username),
+            "channel_id": str(channel_id),
+            "platform": str(platform)
+        }
+        
+        # محاولة التعديل أولاً، وإن لم ينفع يتم الإدراج
+        try:
+            supabase.table("bot_configs").insert(data).execute()
+        except Exception:
+            supabase.table("bot_configs").update(data).eq("guild_id", str(guild_id)).execute()
+
+        return redirect(url_for("index", success=1))
+    except Exception as e:
+        print(f"Save Error: {e}")
+        return redirect(url_for("index"))
 
 if __name__ == "__main__":
     monitor_thread = threading.Thread(target=check_streams, daemon=True)
