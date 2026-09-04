@@ -56,36 +56,72 @@ def check_streams():
             print(f"Error in stream monitor: {e}")
         time.sleep(60)
 
-# 5. واجهة لوحة التحكم
+# 5. الواجهة بتصميم تيك توك العصري والقوائم
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>إدارة التنبيهات التلقائية</title>
+    <title>لوحة تحكم التنبيهات التلقائية</title>
     <style>
-        * { box-sizing: border-box; }
-        body { background-color: #0d0e12; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
-        .card { background: #16171d; border-radius: 20px; padding: 28px 24px; width: 100%; max-width: 380px; border: 1px solid #23242c; text-align: center; }
-        h2 { font-size: 22px; font-weight: 800; margin: 0 0 10px 0; }
-        .subtitle { font-size: 13px; color: #9a9cae; margin-bottom: 20px; line-height: 1.5; }
-        .form-group { margin-bottom: 18px; text-align: right; }
-        label { display: block; margin-bottom: 8px; font-size: 13px; font-weight: 700; color: #ffffff; text-align: center; }
-        input, select { width: 100%; padding: 14px; border-radius: 10px; border: 1px solid #23242c; background: #000000; color: #ffffff; font-size: 14px; direction: ltr; text-align: center; outline: none; }
-        select { direction: rtl; text-align-last: center; appearance: none; }
-        .status-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(0, 229, 153, 0.1); border: 1px solid #00e599; color: #00e599; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-bottom: 20px; }
-        button, .btn { width: 100%; padding: 14px; border: none; border-radius: 12px; background: #fe2c55; color: #ffffff; font-weight: bold; cursor: pointer; font-size: 15px; margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; }
-        button:active, .btn:active { transform: scale(0.98); }
-        .login-btn { background: #5865F2; }
-        .join-btn { background: #23242c; border: 1px solid #333544; color: #ffffff; margin-top: 12px; }
-        .user-info { display: flex; align-items: center; justify-content: center; gap: 10px; margin-bottom: 20px; background: #000000; padding: 10px; border-radius: 12px; }
-        .user-info img { width: 32px; height: 32px; border-radius: 50%; }
-        .alert { background: rgba(0, 229, 153, 0.15); border: 1px solid #00e599; color: #00e599; padding: 10px; border-radius: 10px; font-size: 13px; margin-bottom: 15px; }
+        * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        body { background-color: #121212; color: #ffffff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
+        .card { background: #1e1e1e; border-radius: 20px; padding: 24px; width: 100%; max-width: 400px; border: 1px solid #2f2f2f; box-shadow: 0px 8px 25px rgba(0,0,0,0.5); text-align: center; position: relative; }
+        
+        /* القائمة العلوية Header Menu */
+        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid #2f2f2f; }
+        .logo { font-weight: 900; font-size: 18px; color: #ffffff; text-shadow: -1px -1px 0 #00f2fe, 1px 1px 0 #fe2c55; }
+        .auth-btn { text-decoration: none; font-size: 12px; padding: 6px 12px; border-radius: 20px; font-weight: bold; }
+        .login-link { background: #fe2c55; color: #fff; }
+        .logout-link { background: #2f2f2f; color: #aaa; border: 1px solid #444; }
+
+        h2 { font-size: 20px; font-weight: 800; margin: 10px 0 6px 0; }
+        .subtitle { font-size: 12px; color: #a0a0a0; margin-bottom: 20px; }
+        
+        .form-group { margin-bottom: 16px; text-align: right; }
+        label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 700; color: #e0e0e0; }
+        
+        /* القوائم المدسوسة وحقول الإدخال بتصميم TikTok */
+        select, input { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #333; background: #121212; color: #ffffff; font-size: 13px; outline: none; transition: 0.2s; }
+        select { direction: rtl; text-align-last: center; appearance: none; cursor: pointer; }
+        select:focus, input:focus { border-color: #00f2fe; box-shadow: 0 0 5px rgba(0, 242, 254, 0.4); }
+        input { text-align: center; direction: ltr; }
+        
+        .status-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(0, 242, 254, 0.1); border: 1px solid #00f2fe; color: #00f2fe; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-bottom: 18px; }
+        
+        /* الأزرار الرئيسية */
+        .btn-submit { width: 100%; padding: 14px; border: none; border-radius: 12px; background: linear-gradient(45deg, #fe2c55, #ff0050); color: #ffffff; font-weight: bold; cursor: pointer; font-size: 14px; margin-top: 10px; transition: 0.2s; }
+        .btn-submit:active { transform: scale(0.98); }
+        
+        .join-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 12px; border-radius: 12px; background: #2f2f2f; color: #ffffff; font-weight: bold; text-decoration: none; font-size: 13px; margin-top: 12px; border: 1px solid #444; transition: 0.2s; }
+        .join-btn:hover { border-color: #00f2fe; color: #00f2fe; }
+
+        .user-chip { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #fff; background: #121212; padding: 4px 10px; border-radius: 20px; border: 1px solid #333; }
+        .user-chip img { width: 22px; height: 22px; border-radius: 50%; }
+        .alert { background: rgba(0, 242, 254, 0.15); border: 1px solid #00f2fe; color: #00f2fe; padding: 10px; border-radius: 10px; font-size: 12px; margin-bottom: 15px; }
     </style>
 </head>
 <body>
     <div class="card">
+        <!-- الشريط العلوي والقوائم -->
+        <div class="top-bar">
+            <div class="logo">2s2 STREAM</div>
+            {% if user %}
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <div class="user-chip">
+                        {% if user.avatar %}
+                            <img src="https://cdn.discordapp.com/avatars/{{ user.id }}/{{ user.avatar }}.png" alt="Avatar">
+                        {% endif %}
+                        <span>{{ user.username }}</span>
+                    </div>
+                    <a href="/logout" class="auth-btn logout-link">خروج</a>
+                </div>
+            {% else %}
+                <a href="/login" class="auth-btn login-link">تسجيل الدخول</a>
+            {% endif %}
+        </div>
+
         <h2>إدارة التنبيهات التلقائية</h2>
         <div class="subtitle">قم بإعداد حساب المنصة وروم الديسكورد للتنبيه المباشر</div>
 
@@ -94,15 +130,11 @@ HTML_TEMPLATE = """
         {% endif %}
 
         {% if not user %}
-            <a href="/login" class="btn login-btn">🔑 تسجيل الدخول عبر Discord</a>
-        {% else %}
-            <div class="user-info">
-                {% if user.avatar %}
-                    <img src="https://cdn.discordapp.com/avatars/{{ user.id }}/{{ user.avatar }}.png" alt="Avatar">
-                {% endif %}
-                <span>{{ user.username }}</span>
+            <div style="padding: 20px 0;">
+                <p style="font-size: 13px; color: #aaa; margin-bottom: 15px;">يرجى تسجيل الدخول لعرض سيرفراتك التي تمتلك فيها رتبة إدارية</p>
+                <a href="/login" class="btn-submit" style="display: block; text-decoration: none;">🔑 تسجيل الدخول عبر Discord</a>
             </div>
-
+        {% else %}
             <form method="POST" action="/save">
                 <div class="form-group">
                     <label>اختر السيرفر الإداري:</label>
@@ -110,7 +142,7 @@ HTML_TEMPLATE = """
                         {% for guild in guilds %}
                             <option value="{{ guild.id }}">{{ guild.name }}</option>
                         {% else %}
-                            <option value="2s2">2s2</option>
+                            <option value="" disabled selected>لا توجد سيرفرات بصلاحيات إدارية</option>
                         {% endfor %}
                     </select>
                 </div>
@@ -138,16 +170,20 @@ HTML_TEMPLATE = """
                     <input type="text" name="channel_id" placeholder="مثال: 1538986763622813766" required>
                 </div>
 
-                <button type="submit">💾 حفظ وتفعيل التنبيه الآلي</button>
+                <button type="submit" class="btn-submit">💾 حفظ وتفعيل التنبيه الآلي</button>
             </form>
         {% endif %}
 
-        <a href="https://discord.gg/2s2" target="_blank" class="btn join-btn">👾 انضم لسيرفرنا</a>
+        <!-- زر الانضمام المباشر للسيرفر -->
+        <a href="https://discord.gg/hnbSsFDnF" target="_blank" class="join-btn">
+            👾 انضم لسيرفرنا
+        </a>
     </div>
 </body>
 </html>
 """
 
+# 6. المسارات والمشرعات
 @app.route("/")
 def index():
     user = session.get("user")
@@ -158,13 +194,17 @@ def index():
 @app.route("/login")
 def login():
     if not CLIENT_ID:
-        # تسجيل دخول افتراضي في حال عدم إدخال CLIENT_ID
         session["user"] = {"id": "123", "username": "Admin", "avatar": ""}
         session["guilds"] = [{"id": "2s2", "name": "2s2 Server"}]
         return redirect(url_for("index"))
     
     discord_auth_url = f"https://discord.com/api/oauth2/authorize?client_id={CLIENT_ID}&redirect_uri={REDIRECT_URI}&response_type=code&scope=identify%20guilds"
     return redirect(discord_auth_url)
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("index"))
 
 @app.route("/callback")
 def callback():
@@ -187,6 +227,8 @@ def callback():
 
         guilds_req = requests.get("https://discord.com/api/users/@me/guilds", headers={"Authorization": f"Bearer {token}"})
         user_guilds = guilds_req.json() if guilds_req.status_code == 200 else []
+        
+        # تصفية السيرفرات التي يملك فيها صلاحية الإدارة (Administrator 0x8 أو Manage Guild 0x20)
         admin_guilds = [g for g in user_guilds if (int(g.get("permissions", 0)) & 0x20) == 0x20 or (int(g.get("permissions", 0)) & 0x8) == 0x8]
         session["guilds"] = admin_guilds
     except Exception as e:
@@ -204,7 +246,6 @@ def save():
         channel_id = request.form.get("channel_id")
         platform = request.form.get("platform", "tiktok")
         
-        # تنفيذ عملية الحفظ مع التعامل الآمن للأخطاء
         data = {
             "guild_id": str(guild_id),
             "tiktok_user": str(username),
@@ -212,7 +253,6 @@ def save():
             "platform": str(platform)
         }
         
-        # محاولة التعديل أولاً، وإن لم ينفع يتم الإدراج
         try:
             supabase.table("bot_configs").insert(data).execute()
         except Exception:
