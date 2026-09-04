@@ -1,14 +1,11 @@
 import os
 import time
 import threading
-import asyncio
 import requests
 from flask import Flask, render_template_string, request, redirect, url_for, session
 from supabase import create_client, Client
 import discord
 from discord.ext import commands
-from TikTokLive import TikTokLiveClient
-from TikTokLive.events import ConnectEvent
 
 # 1. إعدادات البيئة
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -29,23 +26,26 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 live_cache = {}
 
-# دالة فحص البث المباشر المعتمدة عبر TikTokLive
-def is_tiktok_live_sync(username):
-    async def _check():
-        try:
-            client = TikTokLiveClient(unique_id=username)
-            return await client.is_live()
-        except Exception as e:
-            print(f"Error checking TikTok live for {username}: {e}")
-            return False
+# دالة آمنة ومستقرة للتحقق من حالة البث على تيك توك
+def check_tiktok_live_status(username):
+    try:
+        url = f"https://www.tiktok.com/@{username}/live"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9"
+        }
+        response = requests.get(url, headers=headers, timeout=8)
+        
+        # مؤشرات وجود البث المباشر داخل الصفحة
+        if response.status_code == 200:
+            content = response.text
+            if '"status":2' in content or 'live-room' in content or 'room_id' in content:
+                return True
+    except Exception as e:
+        print(f"Error checking TikTok status for {username}: {e}")
+    return False
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    result = loop.run_until_complete(_check())
-    loop.close()
-    return result
-
-# 3. دالة إرسال الإشعار وفحص البث
+# 3. دالة المراقبة وإرسال الإشعار
 def check_user_live(guild_id, username, channel_id, platform):
     try:
         stream_url = f"https://www.tiktok.com/@{username}/live" if platform == "tiktok" else (
@@ -53,7 +53,7 @@ def check_user_live(guild_id, username, channel_id, platform):
         )
         cache_key = f"{guild_id}_{username}_{platform}"
         
-        is_live = is_tiktok_live_sync(username) if platform == "tiktok" else False
+        is_live = check_tiktok_live_status(username) if platform == "tiktok" else False
 
         if is_live and not live_cache.get(cache_key):
             channel = bot.get_channel(int(channel_id))
@@ -65,16 +65,16 @@ def check_user_live(guild_id, username, channel_id, platform):
                 )
                 embed.set_footer(text="TikTok Live Notification")
                 
-                # إرسال التنبيه في ديسكورد
+                # إرسال التنبيه في ديسكورد مع منشن للجميع
                 bot.loop.create_task(channel.send(content=f"@everyone {username} بدأ بث حياكم", embed=embed))
                 live_cache[cache_key] = True
         elif not is_live:
             live_cache[cache_key] = False
 
     except Exception as e:
-        print(f"Error checking {username} on {platform}: {e}")
+        print(f"Error in check_user_live: {e}")
 
-# 4. دالة المراقبة المستمرة
+# 4. دالة الخلفية لمراقبة الحسابات المحفوظة
 def check_streams():
     while True:
         try:
@@ -90,10 +90,10 @@ def check_streams():
                     if username and channel_id:
                         check_user_live(guild_id, username, channel_id, platform)
         except Exception as e:
-            print(f"Error in stream monitor: {e}")
+            print(f"Error in stream monitor thread: {e}")
         time.sleep(30)
 
-# 5. تصميم القوائم الجانبية والواجهة
+# 5. تصميم الواجهة والقائمة الجانبية
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -111,7 +111,6 @@ HTML_TEMPLATE = """
         .logo { font-weight: 900; font-size: 18px; color: #ffffff; text-shadow: -1px -1px 0 #00f2fe, 1px 1px 0 #fe2c55; }
         .menu-btn { background: none; border: none; color: #fff; font-size: 24px; cursor: pointer; padding: 0; width: auto; }
 
-        /* القائمة الجانبية */
         .sidebar { position: fixed; top: 0; right: -300px; width: 300px; height: 100%; background: #181818; border-left: 1px solid #2f2f2f; z-index: 1000; transition: 0.3s ease; padding: 20px; text-align: right; overflow-y: auto; box-shadow: -5px 0 15px rgba(0,0,0,0.5); }
         .sidebar.active { right: 0; }
         .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 999; display: none; }
@@ -152,7 +151,6 @@ HTML_TEMPLATE = """
 </head>
 <body>
 
-    <!-- القائمة الجانبية -->
     <div class="overlay" id="overlay" onclick="toggleSidebar()"></div>
     <div class="sidebar" id="sidebar">
         <div class="sidebar-header">
@@ -160,7 +158,6 @@ HTML_TEMPLATE = """
             <button class="close-btn" onclick="toggleSidebar()">✕</button>
         </div>
 
-        <!-- الحساب الجاري -->
         <div class="section-title">الحساب</div>
         {% if user %}
             <div class="user-chip">
@@ -174,11 +171,9 @@ HTML_TEMPLATE = """
             <a href="/login" class="sidebar-item" style="color: #00f2fe;">🔑 تسجيل الدخول عبر Discord</a>
         {% endif %}
 
-        <!-- الروابط العامة -->
         <div class="section-title">الروابط</div>
         <a href="https://discord.gg/hnbSsFDnF" target="_blank" class="sidebar-item">👾 انضم لسيرفرنا</a>
 
-        <!-- السيرفرات المحفوظة -->
         <div class="section-title">السيرفرات المحفوظة</div>
         {% for item in saved_configs %}
             <div class="server-card">
@@ -191,7 +186,6 @@ HTML_TEMPLATE = """
         {% endfor %}
     </div>
 
-    <!-- البطاقة الرئيسية -->
     <div class="card">
         <div class="top-bar">
             <div class="logo">2s2 STREAM</div>
@@ -338,23 +332,26 @@ def save():
             "platform": str(platform)
         }
         
-        # استخدام upsert لضمان تحديث السجل أو إنشائه بدون مشاكل
-        supabase.table("bot_configs").upsert(data, on_conflict="guild_id").execute()
+        # حفظ البيانات في Supabase
+        try:
+            supabase.table("bot_configs").upsert(data, on_conflict="guild_id").execute()
+        except Exception as db_err:
+            print(f"Database error, trying fallback insert/update: {db_err}")
+            try:
+                supabase.table("bot_configs").insert(data).execute()
+            except Exception:
+                supabase.table("bot_configs").update(data).eq("guild_id", str(guild_id)).execute()
 
-        # إرسال إشعار تجريبي وتأكيد في الروم المحددة
-        async def send_confirmation():
-            await bot.wait_until_ready()
-            channel = bot.get_channel(int(channel_id))
-            if channel:
-                embed = discord.Embed(
-                    title=f"⚙️ تم الحفظ والربط بنجاح!",
-                    description=f"تم ربط حساب **@{username}** بالروم بنجاح، وسأقوم بإرسال إشعار فور بدء البث المباشر.",
-                    color=0x2ecc71
-                )
-                embed.set_footer(text="TikTok Live Notification")
-                await channel.send(embed=embed)
-
-        bot.loop.create_task(send_confirmation())
+        # إرسال إشعار التأكيد في روم الديسكورد
+        channel = bot.get_channel(int(channel_id))
+        if channel:
+            embed = discord.Embed(
+                title=f"⚙️ تم الحفظ والربط بنجاح!",
+                description=f"تم ربط حساب **@{username}** بالروم بنجاح، وسأقوم بإرسال إشعار فور بدء البث المباشر.",
+                color=0x2ecc71
+            )
+            embed.set_footer(text="TikTok Live Notification")
+            bot.loop.create_task(channel.send(embed=embed))
 
         return redirect(url_for("index", success=1))
     except Exception as e:
