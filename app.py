@@ -371,7 +371,7 @@ def save():
             "created_at": datetime.utcnow().isoformat()
         }
 
-        response = supabase.table("bot_configs").upsert(payload).execute()
+        response = supabase.table("bot_configs").insert(payload).execute()
 
         try:
             embed = discord.Embed(
