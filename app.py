@@ -17,11 +17,15 @@ REDIRECT_URI = os.environ.get("REDIRECT_URI", "https://tiktok-bot-2s2-dashboard.
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# 2. إعداد تطبيق Flask والبوت
+# 2. إعداد تطبيق Flask والبوت وتفعيل الصلاحيات الكاملة
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "2s2_secret_key_123")
 
 intents = discord.Intents.default()
+intents.message_content = True
+intents.guilds = True
+intents.members = True
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 live_cache = {}
@@ -36,7 +40,6 @@ def check_tiktok_live_status(username):
         }
         response = requests.get(url, headers=headers, timeout=8)
         
-        # مؤشرات وجود البث المباشر داخل الصفحة
         if response.status_code == 200:
             content = response.text
             if '"status":2' in content or 'live-room' in content or 'room_id' in content:
@@ -65,7 +68,7 @@ def check_user_live(guild_id, username, channel_id, platform):
                 )
                 embed.set_footer(text="TikTok Live Notification")
                 
-                # إرسال التنبيه في ديسكورد مع منشن للجميع
+                # إرسال التنبيه في ديسكورد
                 bot.loop.create_task(channel.send(content=f"@everyone {username} بدأ بث حياكم", embed=embed))
                 live_cache[cache_key] = True
         elif not is_live:
@@ -196,7 +199,7 @@ HTML_TEMPLATE = """
         <div class="subtitle">قم بإعداد حساب المنصة وروم الديسكورد للتنبيه المباشر</div>
 
         {% if success %}
-            <div class="alert">✅ تم حفظ البيانات وإرسال التنبيه في الديسكورد!</div>
+            <div class="alert">✅ تم حفظ البيانات وإرسال التنبيه التجريبي في الديسكورد!</div>
         {% endif %}
 
         {% if not user %}
@@ -336,27 +339,37 @@ def save():
         try:
             supabase.table("bot_configs").upsert(data, on_conflict="guild_id").execute()
         except Exception as db_err:
-            print(f"Database error, trying fallback insert/update: {db_err}")
+            print(f"Database error: {db_err}")
             try:
                 supabase.table("bot_configs").insert(data).execute()
             except Exception:
                 supabase.table("bot_configs").update(data).eq("guild_id", str(guild_id)).execute()
 
-        # إرسال إشعار التأكيد في روم الديسكورد
-        channel = bot.get_channel(int(channel_id))
-        if channel:
-            embed = discord.Embed(
-                title=f"⚙️ تم الحفظ والربط بنجاح!",
-                description=f"تم ربط حساب **@{username}** بالروم بنجاح، وسأقوم بإرسال إشعار فور بدء البث المباشر.",
-                color=0x2ecc71
-            )
-            embed.set_footer(text="TikTok Live Notification")
-            bot.loop.create_task(channel.send(embed=embed))
+        # إرسال رسالة تجريبية في الديسكورد للتأكد من ربط القناة
+        async def send_confirmation():
+            await bot.wait_until_ready()
+            try:
+                channel = bot.get_channel(int(channel_id))
+                if channel:
+                    embed = discord.Embed(
+                        title="⚙️ تم الحفظ والربط بنجاح!",
+                        description=f"تم ربط حساب **@{username}** بهذه الروم، وسأقوم بإرسال إشعار تلقائي هنا عند بدء البث.",
+                        color=0x2ecc71
+                    )
+                    await channel.send(embed=embed)
+            except Exception as ch_err:
+                print(f"Failed to send confirmation to channel {channel_id}: {ch_err}")
+
+        bot.loop.create_task(send_confirmation())
 
         return redirect(url_for("index", success=1))
     except Exception as e:
         print(f"Save Error: {e}")
         return redirect(url_for("index"))
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user.name} ({bot.user.id})")
 
 if __name__ == "__main__":
     monitor_thread = threading.Thread(target=check_streams, daemon=True)
