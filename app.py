@@ -9,7 +9,7 @@ from supabase import create_client, Client
 import discord
 from discord.ext import commands
 from TikTokLive import TikTokLiveClient
-from TikTokLive.proto.utilities import LiveNotFound
+from TikTokLive.errors import UserNotFound, LiveNotFound
 
 # 1. إعداد متغيرات البيئة
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -19,10 +19,8 @@ CLIENT_ID = os.environ.get("CLIENT_ID", "")
 CLIENT_SECRET = os.environ.get("CLIENT_SECRET", "")
 REDIRECT_URI = os.environ.get("REDIRECT_URI", "https://tiktok-bot-2s2-dashboard.onrender.com/callback")
 
-# الاتصال بقاعدة البيانات Supabase
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# 2. إعداد تطبيق Flask والبوت
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "2s2_secret_key_123")
 
@@ -46,7 +44,7 @@ def check_tiktok_live_status(username):
 
         if room_info and getattr(room_info, "status", 0) == 2:
             return True
-    except LiveNotFound:
+    except (UserNotFound, LiveNotFound):
         return False
     except Exception as e:
         print(f"Error checking TikTok status for {username}: {e}")
@@ -69,7 +67,7 @@ def check_kick_live_status(username):
         print(f"Error checking Kick status for {username}: {e}")
     return False
 
-# دالة إرسال التنبيهات في الديسكورد بأمان
+# دالة إرسال التنبيهات في الديسكورد
 async def send_discord_message_async(channel_id, content=None, embed=None):
     try:
         channel = bot.get_channel(int(channel_id))
@@ -81,7 +79,7 @@ async def send_discord_message_async(channel_id, content=None, embed=None):
     except Exception as e:
         print(f"Failed to send message to channel {channel_id}: {e}")
 
-# 3. دالة فحص وإرسال إشعار البث المباشر الفعلي
+# دالة فحص وإرسال إشعار البث المباشر الفعلي
 def check_user_live(guild_id, username, channel_id, platform):
     try:
         if platform == "tiktok":
@@ -96,7 +94,7 @@ def check_user_live(guild_id, username, channel_id, platform):
         cache_key = f"{guild_id}_{username}_{platform}"
 
         if is_live and not live_cache.get(cache_key):
-            color = 0xfe2c55 if platform == "tiktok" else 0x53fc18 # لون تيكتوك الوردي أو لون كيك الأخضر
+            color = 0xfe2c55 if platform == "tiktok" else 0x53fc18
             embed = discord.Embed(
                 title=f"🔴 {username} الآن في بث مباشر على {platform.capitalize()}!",
                 description=f"**رابط البث**\n[اضغط هنا للإنضمام للبث]({stream_url})",
@@ -116,7 +114,7 @@ def check_user_live(guild_id, username, channel_id, platform):
     except Exception as e:
         print(f"Error in check_user_live: {e}")
 
-# 4. دالة الخلفية لمراقبة الحسابات في قاعدة البيانات
+# دالة الخلفية لمراقبة الحسابات في قاعدة البيانات
 def check_streams():
     while True:
         try:
@@ -135,7 +133,6 @@ def check_streams():
             print(f"Error in stream monitor thread: {e}")
         time.sleep(30)
 
-# 5. الواجهة والتصميم
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -146,46 +143,33 @@ HTML_TEMPLATE = """
     <style>
         * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
         body { background-color: #121212; color: #ffffff; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
-        
         .card { background: #1e1e1e; border-radius: 20px; padding: 24px; width: 100%; max-width: 400px; border: 1px solid #2f2f2f; box-shadow: 0px 8px 25px rgba(0,0,0,0.5); text-align: center; position: relative; }
-        
         .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid #2f2f2f; }
         .logo { font-weight: 900; font-size: 18px; color: #ffffff; text-shadow: -1px -1px 0 #00f2fe, 1px 1px 0 #fe2c55; }
         .menu-btn { background: none; border: none; color: #fff; font-size: 24px; cursor: pointer; padding: 0; width: auto; }
-
         .sidebar { position: fixed; top: 0; right: -300px; width: 300px; height: 100%; background: #181818; border-left: 1px solid #2f2f2f; z-index: 1000; transition: 0.3s ease; padding: 20px; text-align: right; overflow-y: auto; box-shadow: -5px 0 15px rgba(0,0,0,0.5); }
         .sidebar.active { right: 0; }
         .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 999; display: none; }
         .overlay.active { display: block; }
-        
         .sidebar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #2f2f2f; padding-bottom: 10px; }
         .close-btn { background: none; border: none; color: #fe2c55; font-size: 20px; cursor: pointer; font-weight: bold; width: auto; }
-
         .section-title { font-size: 13px; font-weight: 800; color: #00f2fe; margin: 15px 0 8px 0; text-transform: uppercase; letter-spacing: 0.5px; }
-
         .sidebar-item { display: flex; align-items: center; gap: 10px; padding: 12px; color: #fff; text-decoration: none; border-radius: 10px; margin-bottom: 8px; background: #222; font-size: 13px; font-weight: bold; transition: 0.2s; border: 1px solid #2f2f2f; }
         .sidebar-item:hover { background: #2f2f2f; border-color: #00f2fe; }
-
         .server-card { background: #121212; border: 1px solid #333; padding: 10px 12px; border-radius: 10px; font-size: 13px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 4px; }
         .server-card .user-name { font-weight: bold; color: #fe2c55; font-size: 14px; }
         .server-card .server-id { color: #aaa; font-size: 11px; }
-
         h2 { font-size: 20px; font-weight: 800; margin: 10px 0 6px 0; }
         .subtitle { font-size: 12px; color: #a0a0a0; margin-bottom: 20px; }
-        
         .form-group { margin-bottom: 16px; text-align: right; }
         label { display: block; margin-bottom: 6px; font-size: 12px; font-weight: 700; color: #e0e0e0; }
-        
         select, input { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #333; background: #121212; color: #ffffff; font-size: 13px; outline: none; transition: 0.2s; }
         select { direction: rtl; text-align-last: center; appearance: none; cursor: pointer; }
         select:focus, input:focus { border-color: #00f2fe; box-shadow: 0 0 5px rgba(0, 242, 254, 0.4); }
         input { text-align: center; direction: ltr; }
-        
         .status-badge { display: inline-flex; align-items: center; gap: 6px; background: rgba(0, 242, 254, 0.1); border: 1px solid #00f2fe; color: #00f2fe; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: bold; margin-bottom: 18px; }
-        
         .btn-submit { width: 100%; padding: 14px; border: none; border-radius: 12px; background: linear-gradient(45deg, #fe2c55, #ff0050); color: #ffffff; font-weight: bold; cursor: pointer; font-size: 14px; margin-top: 10px; transition: 0.2s; }
         .btn-submit:active { transform: scale(0.98); }
-        
         .user-chip { display: flex; align-items: center; gap: 8px; font-size: 13px; color: #fff; background: #121212; padding: 8px 12px; border-radius: 12px; border: 1px solid #333; margin-bottom: 10px; }
         .user-chip img { width: 26px; height: 26px; border-radius: 50%; }
         .alert { background: rgba(0, 242, 254, 0.15); border: 1px solid #00f2fe; color: #00f2fe; padding: 10px; border-radius: 10px; font-size: 12px; margin-bottom: 15px; }
@@ -296,7 +280,6 @@ HTML_TEMPLATE = """
 </html>
 """
 
-# 6. مسارات التطبيق
 @app.route("/")
 def index():
     user = session.get("user")
@@ -377,10 +360,8 @@ def save():
             "created_at": datetime.utcnow().isoformat()
         }
 
-        # حفظ البيانات في Supabase
         response = supabase.table("bot_configs").upsert(payload).execute()
 
-        # إرسال التنبيه التجريبي للمنصة المختارة
         try:
             embed = discord.Embed(
                 title=f"🧪 رسالة تجريبية - اختبار نظام التنبيهات",
