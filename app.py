@@ -402,7 +402,11 @@ def save():
 
 @bot.event
 async def on_ready():
+    activity = discord.CustomActivity(name="🔴 2s2 STREAM | LIVE Notifications")
+    await bot.change_presence(status=discord.Status.online, activity=activity)
     print(f"Logged in as {bot.user.name} ({bot.user.id})")
+
+    
 
 if __name__ == "__main__":
     monitor_thread = threading.Thread(target=check_streams, daemon=True)
